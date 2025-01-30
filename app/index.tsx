@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
+import { checkUserExists } from '../utils/database';
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 
 export default function IndexScreen() {
