@@ -23,11 +23,9 @@ export default function UserHomeScreen() {
           router.replace("/");
           return;
         }
-        const newsSnapshot1= getRecentNewsByTags(["sports"]).then(snapshot => {
+        const newsSnapshot= getRecentNewsByTags(["sports"]).then(snapshot => {
           setNewsArticles(snapshot);
         });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log("news",newsArticles);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -76,7 +74,7 @@ export default function UserHomeScreen() {
       >
         <Text style={styles.header}>{currentArticle.title}</Text>
         <Text style={styles.content} numberOfLines={3}>
-          {currentArticle.content}
+          {currentArticle.content_short}
         </Text>
         
         <View style={styles.buttonsContainer}>

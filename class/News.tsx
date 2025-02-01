@@ -5,7 +5,7 @@ import {
 import { db } from "../app/firebaseConfig";
 
 class News {
-  constructor(title, date, likes, dislikes, content_long, content_short, tags) {
+  constructor(title, date, likes, dislikes, content_long, content_short, tags, country, city) {
     this.title = title;
     this.date = date;
     this.likes = likes;
@@ -13,6 +13,8 @@ class News {
     this.content_long = content_long;
     this.content_short = content_short;
     this.tags = tags;
+    this.country = country;
+    this.city = city;
   }
 }
 
@@ -25,6 +27,8 @@ const newsConverter = {
     content_long: news.content_long,
     content_short: news.content_short,
     tags: news.tags,
+    country: news.country,
+    city: news.city,
   }),
   fromFirestore: (snapshot, options) => {
     const data = snapshot.data(options);
@@ -35,7 +39,9 @@ const newsConverter = {
       data.dislikes,
       data.content_long,
       data.content_short,
-      data.tags
+      data.tags,
+      data.country,
+      data.city
     );
   },
 };
@@ -93,7 +99,9 @@ export const addMockNewsData = async () => {
       15,
       "Stock markets are predicted to fall drastically due to global economic instability...",
       "Markets may crash soon!",
-      ["finance", "stocks", "economy"]
+      ["finance", "stocks", "economy"],
+      "USA",
+      "New York"
     ),
     new News(
       "Tech Giants Release New AI",
@@ -102,7 +110,9 @@ export const addMockNewsData = async () => {
       10,
       "Several major tech companies have unveiled their latest AI models, promising groundbreaking advancements...",
       "New AI models announced!",
-      ["technology", "AI", "innovation"]
+      ["technology", "AI", "innovation"],
+      "UK",
+      "London"
     ),
     new News(
       "Sports Finals: Historic Victory",
@@ -111,7 +121,9 @@ export const addMockNewsData = async () => {
       5,
       "In an incredible turn of events, the underdogs secured a last-minute victory in the finals...",
       "Underdogs win big!",
-      ["sports", "football", "championship"]
+      ["sports", "football", "championship"],
+      "Spain",
+      "Madrid"
     )
   ];
 
