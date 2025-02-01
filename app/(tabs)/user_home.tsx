@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import ArticleModal from "../../components/articlemodal";
 import { router } from "expo-router";
-import { getAllNews } from "../../class/News";
+import { getAllNews, getRecentNewsByTags, addMockNewsData } from "../../class/News";
 
 export default function UserHomeScreen() {
   const [newsArticles, setNewsArticles] = useState([]);
@@ -16,28 +16,18 @@ export default function UserHomeScreen() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Check credentials first
+        //addMockNewsData();
         const storedEmail = window.localStorage.getItem("emailForSignIn");
         const storedPassword = window.localStorage.getItem("passwordForSignIn");
         if (!storedEmail || !storedPassword) {
           router.replace("/");
           return;
         }
-
-        // Add initial loading delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Fetch news data
-        const newsSnapshot = await getAllNews();
-        const articles = newsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Add artificial delay to simulate loading
+        const newsSnapshot1= getRecentNewsByTags(["sports"]).then(snapshot => {
+          setNewsArticles(snapshot);
+        });
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setNewsArticles(articles);
+        console.log("news",newsArticles);
       } catch (err) {
         setError(err.message);
       } finally {
