@@ -46,8 +46,6 @@ export default function UserSettingsScreen() {
     try {
       const auth = getAuth();
       await signOut(auth); // Log out the user
-      localStorage.removeItem("emailForSignIn");
-      localStorage.removeItem("passwordForSignIn");
       Alert.alert("Success", "Logged out successfully!");
       router.replace("/"); // Navigate to index.tsx
     } catch (error) {
@@ -60,11 +58,11 @@ export default function UserSettingsScreen() {
     try {
       const auth = getAuth();
       const user = auth.currentUser;
+      console.log("User before deletion:", user);
 
       if (user) {
         await deleteUser(user); // Delete user from Firebase
-        localStorage.removeItem("emailForSignIn");
-        localStorage.removeItem("passwordForSignIn");
+        console.log("User deleted:", user);
         Alert.alert("Success", "User account deleted successfully!");
         router.replace("/"); // Navigate to index.tsx
       } else {

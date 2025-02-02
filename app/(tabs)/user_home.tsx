@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import ArticleModal from "../../components/articlemodal";
 import { router } from "expo-router";
-import { getAllNews, getRecentNewsByTags, addMockNewsData } from "../../class/News";
+import { getRecentNewsByTags } from "../../class/News";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getUser } from "@/class/User";
 
 export default function UserHomeScreen() {
   const [newsArticles, setNewsArticles] = useState([]);
@@ -11,39 +18,48 @@ export default function UserHomeScreen() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loggedUser, setLoggedUser] = useState(null);
 
   const currentArticle = newsArticles[currentArticleIndex];
-
   const auth = getAuth();
 
   useEffect(() => {
-    const initializeApp = async () => {
+    const fetchUserAndNews = async () => {
       try {
-        //addMockNewsData();
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          if (user) {
-            console.log("User already logged in:", user.uid);
-          } else {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (!user) {
             console.log("User not logged in");
-            router.replace("/"); // Redirect if not logged in
+            router.replace("/"); // Redirect to login
+            return;
           }
+
+          console.log("User logged in:", user.uid);
+          const userData = await getUser(user.uid);
+          setLoggedUser(userData);
+
+          if (userData?.tags?.length) {
+            console.log("User tags:", userData.tags);
+            const newsSnapshot = await getRecentNewsByTags(userData.tags);
+            setNewsArticles(newsSnapshot);
+          } else {
+            console.log("No tags found for user.");
+          }
+
+          setLoading(false);
         });
-        const newsSnapshot= getRecentNewsByTags(["sports"]).then(snapshot => {
-          setNewsArticles(snapshot);
-        });
+
         return () => unsubscribe(); // Cleanup on unmount
       } catch (err) {
         setError(err.message);
-      } finally {
         setLoading(false);
       }
     };
 
-    initializeApp();
+    fetchUserAndNews();
   }, []);
 
   const handleNextArticle = () => {
-    setCurrentArticleIndex(prev => (prev + 1) % newsArticles.length);
+    setCurrentArticleIndex((prev) => (prev + 1) % newsArticles.length);
   };
 
   const closeModal = () => {
@@ -78,7 +94,7 @@ export default function UserHomeScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.newsCard}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.9}
@@ -87,16 +103,16 @@ export default function UserHomeScreen() {
         <Text style={styles.content} numberOfLines={3}>
           {currentArticle.content_short}
         </Text>
-        
+
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, styles.dislikeButton]}
             onPress={handleNextArticle}
           >
             <Text style={styles.buttonText}>Dislike</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.button, styles.likeButton]}
             onPress={handleNextArticle}
           >
@@ -117,21 +133,21 @@ export default function UserHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: "#f0f2f5",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   newsCard: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -139,53 +155,53 @@ const styles = StyleSheet.create({
   },
   header: {
     fontSize: 22,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: "600",
+    color: "#1a1a1a",
     marginBottom: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   content: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#444',
+    color: "#444",
     marginBottom: 25,
   },
   buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 15,
   },
   button: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginHorizontal: 5,
   },
   likeButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: "#007bff",
   },
   dislikeButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: "#dc3545",
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   loadingText: {
     marginTop: 20,
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   errorText: {
     fontSize: 16,
-    color: '#dc3545',
-    textAlign: 'center',
+    color: "#dc3545",
+    textAlign: "center",
   },
   noArticlesText: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
   },
 });
