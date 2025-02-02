@@ -159,3 +159,53 @@ import {
       return false;
     }
   };
+
+  export const addMockNewsData = async () => {
+    const mockNews = [
+      new News(
+        "Breaking: Market Crash Expected",
+        new Date(),
+        120,
+        15,
+        "Stock markets are predicted to fall drastically due to global economic instability...",
+        "Markets may crash soon!",
+        ["finance", "stocks", "economy"],
+        "USA",
+        "New York"
+      ),
+      new News(
+        "Tech Giants Release New AI",
+        new Date(),
+        200,
+        10,
+        "Several major tech companies have unveiled their latest AI models, promising groundbreaking advancements...",
+        "New AI models announced!",
+        ["technology", "AI", "innovation"],
+        "UK",
+        "London"
+      ),
+      new News(
+        "Sports Finals: Historic Victory",
+        new Date(),
+        300,
+        5,
+        "In an incredible turn of events, the underdogs secured a last-minute victory in the finals...",
+        "Underdogs win big!",
+        ["sports", "football", "championship"],
+        "Spain",
+        "Madrid"
+      )
+    ];
+  
+    try {
+      for (const article of mockNews) {
+        const newsRef = doc(collection(db, "news").withConverter(newsConverter));
+        console.log("Adding mock news data...");
+        await setDoc(newsRef, newsConverter.toFirestore(article));
+        console.log(`Added news with ID: ${newsRef.id}`);
+      }
+      console.log("Mock news data added successfully.");
+    } catch (error) {
+      console.error("Error adding mock news data:", error);
+    }
+  };

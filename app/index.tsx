@@ -11,16 +11,26 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 
 export default function IndexScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  //const [loading, setLoading] = useState(true); // Loading state while checking user session
+  const [location, setLocation] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState(false);
 
   const auth = getAuth();
 
   useEffect(() => {
+    const checkPermissions = async () => {
+      await requestLocationPermission();
+      await requestNotificationPermission();
+    };
+
+    checkPermissions();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         console.log("User already logged in:", user.uid);
@@ -30,6 +40,42 @@ export default function IndexScreen() {
 
     return () => unsubscribe(); // Cleanup on unmount
   }, []);
+
+  /** 📍 Request Location Permission */
+  const requestLocationPermission = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        console.warn("Location permission denied.");
+        return;
+      }
+
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      console.log("User location:", loc.coords);
+    } catch (error) {
+      console.error("Error getting location:", error);
+    }
+  };
+
+  /** 🔔 Request Notification Permission */
+  const requestNotificationPermission = async () => {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === "granted") {
+        setNotificationPermission(true);
+        console.log("Notification permission granted.");
+      } else {
+        console.warn("Notification permission denied.");
+      }
+    } catch (error) {
+      console.error("Error requesting notification permission:", error);
+    }
+  };
 
   const handleLogin = async () => {
     try {
@@ -92,6 +138,18 @@ export default function IndexScreen() {
       <TouchableOpacity style={styles.button} onPress={handleRegister}>
         <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
+
+      {/* Display Location (For Debugging) */}
+      {location && (
+        <Text style={styles.infoText}>
+          Location: {location.latitude}, {location.longitude}
+        </Text>
+      )}
+
+      {/* Display Notification Status (For Debugging) */}
+      <Text style={styles.infoText}>
+        Notifications: {notificationPermission ? "Enabled" : "Disabled"}
+      </Text>
     </View>
   );
 }
@@ -131,5 +189,5 @@ const styles = StyleSheet.create({
   },
   disabledButton: { backgroundColor: "#ccc" },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  infoText: { fontSize: 14, color: "#666", marginTop: 10 },
 });

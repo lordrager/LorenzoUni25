@@ -26,6 +26,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="user_achievments"
+        options={{
+          title: 'Achievments',
+          tabBarIcon: ({ color }) => <FontAwesome size={28} name="trophy" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="user_settings"
         options={{
           title: 'Profile',
