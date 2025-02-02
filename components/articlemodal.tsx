@@ -8,55 +8,87 @@ import {
   ScrollView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../app/firebaseConfig";
+import { updateNewsByTitle } from "../class/News";
 
 interface ArticleModalProps {
   visible: boolean;
-  article: { id: string; title: string; content_long: string; likes: number; dislikes: number };
+  article: { title: string; content_long: string; likes: number; dislikes: number } | null;
   onClose: () => void;
 }
 
 export default function ArticleModal({ visible, article, onClose }: ArticleModalProps) {
-  const [likes, setLikes] = useState(article.likes);
-  const [dislikes, setDislikes] = useState(article.dislikes);
+  const [likes, setLikes] = useState(article?.likes || 0);
+  const [dislikes, setDislikes] = useState(article?.dislikes || 0);
+  const [likePressed, setLikesPressed] = useState(false);
+  const [dislikesPressed, setDislikesPressed] = useState(false);
 
+  // Reset states when modal opens/closes
   useEffect(() => {
-    
-  }, []);
+    if (visible && article) {
+      setLikes(article.likes);
+      setDislikes(article.dislikes);
+      setLikesPressed(false);
+      setDislikesPressed(false);
+    }
+  }, [visible, article]);
+
+  const handleClose = () => {
+    setLikesPressed(false);
+    setDislikesPressed(false);
+    console.log("Closing modal");
+    onClose(); // Call parent function to close the modal
+  };
 
   const handleLike = async () => {
-    const newsRef = doc(db, "news", article.id);
-    try {
-      await updateDoc(newsRef, { likes: likes + 1 });
-      setLikes(likes + 1);
-    } catch (error) {
-      console.error("Error liking article:", error);
+    if (!article) return;
+    let updatedFields: any = {};
+
+    if (!likePressed && !dislikesPressed) {
+      updatedFields = { likes: likes + 1 };
+    } else if (likePressed && !dislikesPressed) {
+      updatedFields = { likes: likes - 1 };
+    } else if (!likePressed && dislikesPressed) {
+      updatedFields = { likes: likes + 1, dislikes: dislikes - 1 };
+    }
+
+    const success = await updateNewsByTitle(article.title, updatedFields);
+    if (success) {
+      setLikes(updatedFields.likes || likes);
+      setDislikes(updatedFields.dislikes || dislikes);
+      setLikesPressed(!likePressed);
+      setDislikesPressed(false);
     }
   };
 
   const handleDislike = async () => {
-    const newsRef = doc(db, "news", article.id);
-    console.log("Disliking article with ID:", article.id);  
-    try {
-      await updateDoc(newsRef, { dislikes: dislikes + 1 });
-      setDislikes(dislikes + 1);
-    } catch (error) {
-      console.error("Error disliking article:", error);
+    if (!article) return;
+    let updatedFields: any = {};
+
+    if (!likePressed && !dislikesPressed) {
+      updatedFields = { dislikes: dislikes + 1 };
+    } else if (!likePressed && dislikesPressed) {
+      updatedFields = { dislikes: dislikes - 1 };
+    } else if (likePressed && !dislikesPressed) {
+      updatedFields = { dislikes: dislikes + 1, likes: likes - 1 };
+    }
+
+    const success = await updateNewsByTitle(article.title, updatedFields);
+    if (success) {
+      setLikes(updatedFields.likes || likes);
+      setDislikes(updatedFields.dislikes || dislikes);
+      setDislikesPressed(!dislikesPressed);
+      setLikesPressed(false);
     }
   };
 
+  if (!visible || !article) return null; // Hide modal when closed
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
             <Text style={styles.closeButtonText}>X</Text>
           </TouchableOpacity>
 
@@ -68,13 +100,19 @@ export default function ArticleModal({ visible, article, onClose }: ArticleModal
 
           {/* Like & Dislike Buttons */}
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.button} onPress={handleLike}>
-              <Feather name="thumbs-up" size={24} color="green" />
+            <TouchableOpacity 
+              style={[styles.button, likePressed && styles.likeButton]} 
+              onPress={handleLike}
+            >
+              <Feather name="thumbs-up" size={24} color="white" />
               <Text style={styles.buttonText}>{likes}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.button} onPress={handleDislike}>
-              <Feather name="thumbs-down" size={24} color="red" />
+            <TouchableOpacity 
+              style={[styles.button, dislikesPressed && styles.dislikeButton]} 
+              onPress={handleDislike}
+            >
+              <Feather name="thumbs-down" size={24} color="white" />
               <Text style={styles.buttonText}>{dislikes}</Text>
             </TouchableOpacity>
           </View>
@@ -147,9 +185,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     padding: 10,
+    backgroundColor: "gray",
+    borderRadius: 5,
   },
   buttonText: {
     fontSize: 16,
     fontWeight: "bold",
+    color: "white",
+  },
+  likeButton: {
+    backgroundColor: "blue",
+  },
+  dislikeButton: {
+    backgroundColor: "red",
   },
 });

@@ -15,7 +15,7 @@ export default function TabLayout() {
         name="user_notifications"
         options={{
           title: 'Notifications',
-          tabBarIcon: ({ color }) => <FontAwesome size={28} name="bell" color={color} />
+          tabBarIcon: ({ color }) => <FontAwesome size={28} name="bell" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -26,9 +26,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="user_achievements"
+        options={{
+          title: 'Achievements',
+          tabBarIcon: ({ color }) => <FontAwesome size={28} name="bell" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="user_settings"
         options={{
-          title: 'Settings',
+          title: 'Profile',
           tabBarIcon: ({ color }) => <FontAwesome size={28} name="user" color={color} />,
         }}
       />

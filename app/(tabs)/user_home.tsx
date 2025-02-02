@@ -25,6 +25,7 @@ export default function UserHomeScreen() {
         }
         const newsSnapshot= getRecentNewsByTags(["sports"]).then(snapshot => {
           setNewsArticles(snapshot);
+
         });
       } catch (err) {
         setError(err.message);
@@ -38,6 +39,11 @@ export default function UserHomeScreen() {
 
   const handleNextArticle = () => {
     setCurrentArticleIndex(prev => (prev + 1) % newsArticles.length);
+  };
+
+  const closeModal = () => {
+    console.log("Closing modal");
+    setModalVisible(false);
   };
 
   if (loading) {
@@ -97,7 +103,7 @@ export default function UserHomeScreen() {
       <ArticleModal
         visible={isModalVisible}
         article={currentArticle}
-        onClose={() => setModalVisible(false)}
+        onClose={() => closeModal()}
       />
     </View>
   );

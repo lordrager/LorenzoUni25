@@ -1,5 +1,5 @@
 import { 
-  doc, setDoc, getDoc, collection, getDocs, 
+  doc, setDoc, getDoc, collection, getDocs, updateDoc,
   query, where, orderBy, limit 
 } from "firebase/firestore";
 import { db } from "../app/firebaseConfig";
@@ -65,19 +65,6 @@ export const getRecentNewsByTags = async (tags) => {
     const querySnapshot = await getDocs(q);
     //return querySnapshot;
     return querySnapshot.docs.map(doc => doc.data());
-    /*return querySnapshot.docs.map(doc => {
-      const newsData = doc.data();
-      return {
-        id: doc.id,
-        title: newsData.title,
-        date: newsData.date,
-        likes: newsData.likes,
-        dislikes: newsData.dislikes,
-        content_long: newsData.content_long,
-        content_short: newsData.content_short,
-        tags: newsData.tags
-      };
-    });*/
   } catch (error) {
     console.error("Error fetching recent news:", error);
     return [];
@@ -137,5 +124,30 @@ export const addMockNewsData = async () => {
     console.log("Mock news data added successfully.");
   } catch (error) {
     console.error("Error adding mock news data:", error);
+  }
+};
+
+export const updateNewsByTitle = async (title, updatedFields) => {
+  try {
+    // Reference to the news collection
+    const newsCollection = collection(db, "news").withConverter(newsConverter);
+    // Query to find the news article by title
+    const q = query(newsCollection, where("title", "==", title));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      console.log("No news article found with the given title.");
+      return false;
+    }
+
+    // Assuming titles are unique, update the first matching document
+    const newsDocRef = querySnapshot.docs[0].ref;
+    await updateDoc(newsDocRef, updatedFields, { merge: true });
+
+    console.log(`News article "${title}" updated successfully.`);
+    return true;
+  } catch (error) {
+    console.error("Error updating news article:", error);
+    return false;
   }
 };
