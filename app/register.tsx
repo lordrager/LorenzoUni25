@@ -18,14 +18,16 @@ export default function RegisterScreen() {
   const auth = getAuth();
 
   const handleRegistration = async () => {
-    try {
-      const auth = getAuth();
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      console.log("Registered in user:");
+    /*try {
+      //const auth = getAuth();
+      //const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      //const user = userCredential.user;
+      //console.log("Registered in user:");
       // Successful login
-      Alert.alert("Success", "Regis in successfully!");
-      router.replace("./"); // Navigate after successful login
+      //Alert.alert("Success", "Regis in successfully!");
+      const storedEmail = window.localStorage.setItem("emailForSignIn");
+      const storedPassword = window.localStorage.setItem("passwordForSignIn");
+      router.replace("./preffered_news"); // Navigate after successful login
     } catch (error: any) {
       // Handle specific error cases
       let errorMessage = "Registered in failed. Please try again.";
@@ -35,7 +37,12 @@ export default function RegisterScreen() {
         errorMessage = "Incorrect password";
       }
       Alert.alert("Error", errorMessage);
-    }
+    }*/
+
+    window.localStorage.setItem('emailForSignIn', email);
+    window.localStorage.setItem('passwordForSignIn', password);
+    console.log('Email:', email);
+    router.replace("./preffered_news"); // Navigate after successful login
   };
   return (
     <View style={styles.container}>

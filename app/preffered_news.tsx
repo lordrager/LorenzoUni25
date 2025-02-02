@@ -1,6 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, CheckBox } from "react-native";
-import { Link } from "expo-router";
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, CheckBox, Alert } from "react-native";
+import { Link, router } from "expo-router";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "./firebaseConfig"; // Import your Firebase config
 
 export default function PreferredNewsScreen() {
   const [selectedTags, setSelectedTags] = useState([]);
@@ -20,6 +23,47 @@ export default function PreferredNewsScreen() {
   };
 
   const isSubmitDisabled = selectedTags.length < 4; // Ensure at least 4 tags are selected
+
+  const handleSubmit = async () => {
+    if (isSubmitDisabled) {
+      Alert.alert("Error", "Please select at least 4 tags.");
+      return;
+    }
+
+    // Get stored email and password
+    const storedEmail = window.localStorage.getItem("emailForSignIn");
+    const storedPassword = window.localStorage.getItem("passwordForSignIn");
+
+    if (storedEmail && storedPassword) {
+      try {
+        // Create user with Firebase Authentication
+        const auth = getAuth();
+        const userCredential = await createUserWithEmailAndPassword(auth, storedEmail, storedPassword);
+        const uid = userCredential.user.uid; // Get the generated user UID
+
+        // Save user data to Firestore
+        const userRef = doc(db, "users", uid);
+        await setDoc(userRef, {
+          uid: uid,
+          email: storedEmail,
+          tags: selectedTags,
+          createdAt: new Date(),
+        });
+
+        // Remove stored email and password after successful registration
+        window.localStorage.removeItem("emailForSignIn");
+        window.localStorage.removeItem("passwordForSignIn");
+
+        // Navigate to the home screen
+        router.replace("/");
+      } catch (error) {
+        console.error("Error creating user: ", error);
+        Alert.alert("Registration Failed", "Error creating user. Please try again.");
+      }
+    } else {
+      Alert.alert("Error", "No email or password found in storage.");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -42,9 +86,13 @@ export default function PreferredNewsScreen() {
       </ScrollView>
 
       {/* Submit Button */}
-      <Link href="/user_home" style={styles.link}>
-      <Text style={[styles.button, isSubmitDisabled && styles.disabledButton]}>Submit</Text>
-      </Link>
+      <TouchableOpacity
+        style={[styles.button, isSubmitDisabled && styles.disabledButton]}
+        onPress={handleSubmit}
+        disabled={isSubmitDisabled}
+      >
+        <Text style={styles.buttonText}>Submit</Text>
+      </TouchableOpacity>
 
       {/* Link to go back */}
       <Link href="/confirm_email" style={styles.link}>

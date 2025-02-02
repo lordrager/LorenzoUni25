@@ -22,13 +22,12 @@ export default function IndexScreen() {
     console.log('Executing');
     const handleLogin = async () => {
       try {
-        console.log(storedEmail);
         const userCredential = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
         const user = userCredential.user;
         console.log("Logged in user:");
         // Successful login
         Alert.alert("Success", "Logged in successfully!");
-        router.replace("./user_home"); // Navigate after successful login
+        //router.replace("./user_home"); // Navigate after successful login
       } catch (error: any) {
         // Handle specific error cases
         let errorMessage = "Login failed. Please try again.";

@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native"; // For navigation
 
 export default function ConfirmLogEmailScreen() {
   const [verificationCode, setVerificationCode] = useState("");
   const navigation = useNavigation(); // Hook to navigate between screens
+
 
   const handleConfirm = () => {
     if (verificationCode === "123456") {
