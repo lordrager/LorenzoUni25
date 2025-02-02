@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const achievements = [
   { id: '1', title: 'First Like', description: 'Liked your first article', icon: 'thumbs-up' },
@@ -9,6 +10,22 @@ const achievements = [
 ];
 
 export default function UserAchievements() {
+
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("User already logged in:", user.uid);
+      } else {
+        console.log("User not logged in");
+        router.replace("/"); // Redirect if not logged in
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup on unmount
+  }, []);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Your Achievements</Text>

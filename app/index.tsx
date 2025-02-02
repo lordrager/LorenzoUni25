@@ -6,77 +6,48 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, router } from "expo-router";
-import { checkUserExists } from '../utils/database';
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { router } from "expo-router";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 
 export default function IndexScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  //const [loading, setLoading] = useState(true); // Loading state while checking user session
 
   const auth = getAuth();
 
   useEffect(() => {
-    const storedEmail = window.localStorage.getItem("emailForSignIn");
-    const storedPassword = window.localStorage.getItem("passwordForSignIn");
-    console.log('Executing');
-    const handleLogin = async () => {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
-        const user = userCredential.user;
-        console.log("Logged in user:");
-        // Successful login
-        Alert.alert("Success", "Logged in successfully!");
-        //router.replace("./user_home"); // Navigate after successful login
-      } catch (error: any) {
-        // Handle specific error cases
-        let errorMessage = "Login failed. Please try again.";
-        if (error.code === 'auth/invalid-email') {
-          errorMessage = "Invalid email address";
-        } else if (error.code === 'auth/wrong-password') {
-          errorMessage = "Incorrect password";
-        } else if (error.code === 'auth/user-not-found') {
-          errorMessage = "User not found";
-        }
-        Alert.alert("Error", errorMessage);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("User already logged in:", user.uid);
+        router.replace("/user_home"); // Redirect if logged in
       }
-    };
-    handleLogin();
+    });
+
+    return () => unsubscribe(); // Cleanup on unmount
   }, []);
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  const isLoginDisabled = !email.includes("@") || password.length < 8;
 
   const handleLogin = async () => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      console.log("Logged in user:");
-      // Successful login
+      console.log("Logged in user:", userCredential.user.uid);
       Alert.alert("Success", "Logged in successfully!");
-      router.replace("/user_home"); // Navigate after successful login
-      window.localStorage.setItem('emailForSignIn', email);
-      window.localStorage.setItem('passwordForSignIn', password);
-    } catch (error: any) {
-      // Handle specific error cases
+      router.replace("/user_home");
+    } catch (error) {
       let errorMessage = "Login failed. Please try again.";
-      if (error.code === 'auth/invalid-email') {
-        errorMessage = "Invalid email address";
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect password";
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = "User not found";
-      }
+      if (error.code === "auth/invalid-email") errorMessage = "Invalid email address";
+      if (error.code === "auth/wrong-password") errorMessage = "Incorrect password";
+      if (error.code === "auth/user-not-found") errorMessage = "User not found";
       Alert.alert("Error", errorMessage);
     }
   };
 
   const handleRegister = () => {
-    console.log("Register button pressed");
-    router.replace("./register");
+    router.replace("/register");
   };
 
   return (
@@ -103,37 +74,28 @@ export default function IndexScreen() {
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
         />
-        <TouchableOpacity
-          style={styles.eyeIcon}
-          onPress={() => setShowPassword(!showPassword)}
-        >
-          <Ionicons
-            name={showPassword ? "eye-off" : "eye"}
-            size={20}
-            color="#555"
-          />
+        <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPassword(!showPassword)}>
+          <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#555" />
         </TouchableOpacity>
       </View>
 
       {/* Login Button */}
       <TouchableOpacity
-        style={[styles.button, isLoginDisabled && styles.disabledButton]}
-        disabled={isLoginDisabled}
+        style={[styles.button, (!email.includes("@") || password.length < 8) && styles.disabledButton]}
+        disabled={!email.includes("@") || password.length < 8}
         onPress={handleLogin}
       >
-          <Text style={styles.buttonText}>Log In</Text>
+        <Text style={styles.buttonText}>Log In</Text>
       </TouchableOpacity>
 
-      {/* Register Link */}
-      <TouchableOpacity
-        style={[styles.button]}
-        onPress={handleRegister}
-      >
-          <Text style={styles.buttonText}>Register</Text>
+      {/* Register Button */}
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
+        <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: "#f9f9f9" },
   title: { fontSize: 32, fontWeight: "bold", marginBottom: 10 },
@@ -168,6 +130,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   disabledButton: { backgroundColor: "#ccc" },
-  registerButton: { backgroundColor: "#03DAC5", alignItems: "center" },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

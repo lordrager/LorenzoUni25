@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, FlatList } from "react-native";
 import { getAllNews } from "../../class/News";
 import { Feather } from "@expo/vector-icons";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { router } from "expo-router";
 
 export default function UserSearchScreen() {
   const [searchText, setSearchText] = useState("");
@@ -13,8 +15,20 @@ export default function UserSearchScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const auth = getAuth();
+
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("User already logged in:", user.uid);
+      } else {
+        console.log("User not logged in");
+        router.replace("/"); // Redirect if not logged in
+      }
+    });
+
     fetchNews();
+    return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
   useEffect(() => {

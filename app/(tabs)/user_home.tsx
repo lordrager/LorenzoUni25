@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "rea
 import ArticleModal from "../../components/articlemodal";
 import { router } from "expo-router";
 import { getAllNews, getRecentNewsByTags, addMockNewsData } from "../../class/News";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 export default function UserHomeScreen() {
   const [newsArticles, setNewsArticles] = useState([]);
@@ -13,20 +14,24 @@ export default function UserHomeScreen() {
 
   const currentArticle = newsArticles[currentArticleIndex];
 
+  const auth = getAuth();
+
   useEffect(() => {
     const initializeApp = async () => {
       try {
         //addMockNewsData();
-        const storedEmail = window.localStorage.getItem("emailForSignIn");
-        const storedPassword = window.localStorage.getItem("passwordForSignIn");
-        if (!storedEmail || !storedPassword) {
-          router.replace("/");
-          return;
-        }
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (user) {
+            console.log("User already logged in:", user.uid);
+          } else {
+            console.log("User not logged in");
+            router.replace("/"); // Redirect if not logged in
+          }
+        });
         const newsSnapshot= getRecentNewsByTags(["sports"]).then(snapshot => {
           setNewsArticles(snapshot);
-
         });
+        return () => unsubscribe(); // Cleanup on unmount
       } catch (err) {
         setError(err.message);
       } finally {

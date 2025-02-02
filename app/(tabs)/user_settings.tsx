@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Switch,
   Alert,
 } from "react-native";
-import { getAuth, deleteUser, signOut } from "firebase/auth";
+import { getAuth, deleteUser, signOut, onAuthStateChanged } from "firebase/auth";
 import { router } from "expo-router";
 
 export default function UserSettingsScreen() {
@@ -18,6 +18,20 @@ export default function UserSettingsScreen() {
   const [password, setPassword] = useState("");
   const [language, setLanguage] = useState("English");
   const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const auth = getAuth();
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log("User already logged in:", user.uid);
+      } else {
+        console.log("User not logged in");
+        router.replace("/"); // Redirect if not logged in
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup on unmount
+  }, []);
 
   const handleToggleDarkMode = () => {
     setIsDarkMode((previousState) => !previousState);
