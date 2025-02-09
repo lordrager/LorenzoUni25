@@ -1,299 +1,184 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  Modal,
-  Switch,
-  Alert,
-} from "react-native";
-import { getAuth, deleteUser, signOut, onAuthStateChanged } from "firebase/auth";
-import { router } from "expo-router";
+import React, { useState, useEffect } from 'react';
+import { 
+  View, Text, Switch, Image, FlatList, StyleSheet, TouchableOpacity, Modal, ActivityIndicator 
+} from 'react-native';
+import { getAuth, signOut, onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'expo-router';
+import { getUser, updateUserNotifications } from '@/class/User'; // Import Firebase functions
 
-export default function UserSettingsScreen() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [userName, setUserName] = useState("John Doe");
-  const [password, setPassword] = useState("");
-  const [language, setLanguage] = useState("English");
-  const [isModalVisible, setIsModalVisible] = useState(false);
-
+const UserSettings = () => {
+  const [user, setUser] = useState(null);
+  const [notifications, setNotifications] = useState(false);
+  const [isLogoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
   const auth = getAuth();
+  const router = useRouter();
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log("User already logged in:", user.uid);
+    const fetchUserData = async (uid) => {
+      try {
+        if (!uid) return;
+        const userData = await getUser(uid);
+        if (userData) {
+          setUser(userData);
+          setNotifications(userData.notificationsEnabled);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Listen for authentication state change
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        await fetchUserData(currentUser.uid); // Ensure we await user data
       } else {
-        console.log("User not logged in");
-        router.replace("/"); // Redirect if not logged in
+        router.replace('/'); // Redirect to login if not logged in
       }
     });
 
     return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
-  const handleToggleDarkMode = () => {
-    setIsDarkMode((previousState) => !previousState);
+  const toggleNotifications = async () => {
+    if (!user) return;
+    const newStatus = !notifications;
+    setNotifications(newStatus);
+    await updateUserNotifications(user.id, newStatus);
   };
 
-  const handleSaveChanges = () => {
-    console.log("Settings saved!");
-    setIsModalVisible(false);
-  };
-
-  const handleLogOut = async () => {
+  const confirmLogout = async () => {
     try {
-      const auth = getAuth();
-      await signOut(auth); // Log out the user
-      Alert.alert("Success", "Logged out successfully!");
-      router.replace("/"); // Navigate to index.tsx
+      await signOut(auth);
+      router.replace('/'); // Navigate to login screen
+      console.log('User logged out');
     } catch (error) {
-      console.error("Error logging out:", error);
-      Alert.alert("Error", "Failed to log out. Please try again.");
+      console.error('Logout failed:', error);
     }
+    setLogoutModalVisible(false);
   };
 
-  const handleDeleteUser = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      console.log("User before deletion:", user);
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text>Loading user data...</Text>
+      </View>
+    );
+  }
 
-      if (user) {
-        await deleteUser(user); // Delete user from Firebase
-        console.log("User deleted:", user);
-        Alert.alert("Success", "User account deleted successfully!");
-        router.replace("/"); // Navigate to index.tsx
-      } else {
-        Alert.alert("Error", "No user is currently logged in.");
-      }
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      Alert.alert("Error", "Failed to delete user. Please try again.");
-    }
-  };
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>No user data found.</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, isDarkMode ? styles.darkMode : styles.lightMode]}>
-      <Text style={[styles.header, isDarkMode ? styles.darkText : styles.lightText]}>User Settings</Text>
-
-      {/* Toggle Dark/Light Mode */}
-      <View style={styles.settingRow}>
-        <Text style={[styles.settingLabel, isDarkMode ? styles.darkText : styles.lightText]}>Dark Mode</Text>
-        <Switch value={isDarkMode} onValueChange={handleToggleDarkMode} />
+    <View style={styles.container}>
+      {/* Profile Section */}
+      <View style={styles.profileSection}>
+        <Image source={{ uri: user.profileIcon || 'https://example.com/user-avatar.png' }} style={styles.profileIcon} />
+        <Text style={styles.profileName}>{user.profileName}</Text>
       </View>
 
-      {/* Change Name */}
-      <View style={styles.settingRow}>
-        <Text style={[styles.settingLabel, isDarkMode ? styles.darkText : styles.lightText]}>Name</Text>
-        <TextInput
-          style={[styles.input, isDarkMode ? styles.darkInput : styles.lightInput]}
-          value={userName}
-          onChangeText={setUserName}
-        />
+      {/* User Info */}
+      <View style={styles.infoContainer}>
+        <Text style={styles.infoText}>Level: {user.level}</Text>
+        <Text style={styles.infoText}>HP Needed: {user.hpNeededForNextLevel}</Text>
+        <Text style={styles.infoText}>Rank: {user.rank}</Text>
+        <Text style={styles.infoText}>Login Streak: {user.loginStreak} days</Text>
       </View>
 
-      {/* Change Password */}
-      <View style={styles.settingRow}>
-        <Text style={[styles.settingLabel, isDarkMode ? styles.darkText : styles.lightText]}>Change Password</Text>
-        <TextInput
-          style={[styles.input, isDarkMode ? styles.darkInput : styles.lightInput]}
-          secureTextEntry
-          placeholder="Enter new password"
-          value={password}
-          onChangeText={setPassword}
-        />
+      {/* Notifications Toggle */}
+      <View style={styles.toggleContainer}>
+        <Text style={styles.toggleText}>Enable Notifications</Text>
+        <Switch value={notifications} onValueChange={toggleNotifications} />
       </View>
 
-      {/* Change Language */}
-      <View style={styles.settingRow}>
-        <Text style={[styles.settingLabel, isDarkMode ? styles.darkText : styles.lightText]}>Language</Text>
-        <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-          <Text style={[styles.languageText, isDarkMode ? styles.darkText : styles.lightText]}>{language}</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Liked News Section */}
+      <Text style={styles.sectionTitle}>Liked News</Text>
+      <FlatList
+        data={user.likedNews}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <Text style={styles.newsItem}>• {item.title}</Text>}
+      />
 
-      {/* Save Button */}
-      <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
-        <Text style={styles.saveButtonText}>Save Changes</Text>
-      </TouchableOpacity>
-
-      {/* Log Out Button */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogOut}>
-        <Text style={styles.logoutButtonText}>Log Out</Text>
-      </TouchableOpacity>
-
-      {/* Delete User Button */}
-      <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteUser}>
-        <Text style={styles.deleteButtonText}>Delete Account</Text>
-      </TouchableOpacity>
-
-      {/* Language Selection Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
+      {/* Logout Button */}
+      <TouchableOpacity 
+        style={styles.logoutButton} 
+        onPress={() => setLogoutModalVisible(true)}
       >
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalHeader}>Select Language</Text>
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => {
-                setLanguage("English");
-                setIsModalVisible(false);
-              }}
-            >
-              <Text style={styles.modalOptionText}>English</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => {
-                setLanguage("Spanish");
-                setIsModalVisible(false);
-              }}
-            >
-              <Text style={styles.modalOptionText}>Spanish</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => {
-                setLanguage("French");
-                setIsModalVisible(false);
-              }}
-            >
-              <Text style={styles.modalOptionText}>French</Text>
-            </TouchableOpacity>
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setIsModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
+      {/* Custom Logout Modal */}
+      <Modal
+        visible={isLogoutModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Logout</Text>
+            <Text style={styles.modalText}>Are you sure you want to logout?</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]} 
+                onPress={confirmLogout}
+              >
+                <Text style={styles.confirmText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 50,
-    paddingHorizontal: 20,
-  },
-  lightMode: {
-    backgroundColor: "#f9f9f9",
-  },
-  darkMode: {
-    backgroundColor: "#333",
-  },
-  header: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  darkText: {
-    color: "#fff",
-  },
-  lightText: {
-    color: "#000",
-  },
-  settingRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  settingLabel: {
-    fontSize: 16,
-  },
-  input: {
-    height: 40,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    flex: 1,
-  },
-  darkInput: {
-    backgroundColor: "#555",
-    color: "#fff",
-    borderColor: "#666",
-  },
-  lightInput: {
-    backgroundColor: "#fff",
-    color: "#000",
-    borderColor: "#ccc",
-  },
-  languageText: {
-    fontSize: 16,
-    color: "#007BFF",
-  },
-  saveButton: {
-    backgroundColor: "#007BFF",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  logoutButton: {
-    backgroundColor: "#FF6B6B",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  deleteButton: {
-    backgroundColor: "#FF3B3B",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-  },
-  logoutButtonText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  deleteButtonText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  modalBackground: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  modalContainer: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 10,
-    width: 250,
-  },
-  modalHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  modalOption: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderColor: "#ddd",
-  },
-  modalOptionText: {
-    fontSize: 16,
-  },
-  closeButton: {
-    padding: 10,
-    marginTop: 10,
-    alignItems: "center",
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: "#007BFF",
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#F9F9F9', alignItems: 'center' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  profileSection: { alignItems: 'center', marginBottom: 20 },
+  profileIcon: { width: 100, height: 100, borderRadius: 50, marginBottom: 10, borderWidth: 2, borderColor: '#ddd' },
+  profileName: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+
+  infoContainer: { backgroundColor: '#fff', padding: 15, borderRadius: 10, width: '100%', marginBottom: 20 },
+  infoText: { fontSize: 16, color: '#555', paddingVertical: 2 },
+
+  toggleContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', padding: 15, borderRadius: 10, width: '100%', marginBottom: 20 },
+  toggleText: { fontSize: 16, color: '#333' },
+
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', alignSelf: 'flex-start', marginBottom: 10 },
+  newsItem: { fontSize: 14, color: '#444', paddingVertical: 5 },
+
+  logoutButton: { marginTop: 20, backgroundColor: '#E63946', paddingVertical: 10, paddingHorizontal: 40, borderRadius: 10 },
+  logoutText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
+  modalContent: { backgroundColor: 'white', padding: 20, borderRadius: 10, width: '80%', alignItems: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  modalText: { fontSize: 16, color: '#555', textAlign: 'center', marginBottom: 20 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+  modalButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 5, marginHorizontal: 5 },
+  cancelButton: { backgroundColor: '#ccc' },
+  confirmButton: { backgroundColor: '#E63946' },
+  cancelText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  confirmText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
 });
+
+export default UserSettings;

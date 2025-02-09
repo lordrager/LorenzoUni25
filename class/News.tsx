@@ -1,6 +1,6 @@
 import { 
   doc, setDoc, getDoc, collection, getDocs, updateDoc,
-  query, where, orderBy, limit 
+  query, where, orderBy, limit, arrayUnion
 } from "firebase/firestore";
 import { db } from "../app/firebaseConfig";
 
@@ -149,5 +149,19 @@ export const updateNewsByTitle = async (title, updatedFields) => {
   } catch (error) {
     console.error("Error updating news article:", error);
     return false;
+  }
+};
+
+export const addWatchedNews = async (userId, newsId) => {
+  if (!userId || !newsId) return;
+
+  try {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      watched_news: arrayUnion(newsId), // Add news ID to watched list
+    });
+    console.log(`News ${newsId} added to watched_news`);
+  } catch (error) {
+    console.error("Error adding watched news:", error);
   }
 };
