@@ -12,6 +12,11 @@ export default function UserSearchScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("Relevance");
   const [regionSearch, setRegionSearch] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
+  const [citySearch, setCitySearch] = useState("");
+  const [dateSearch, setDateSearch] = useState("");
+  const [minLikes, setMinLikes] = useState("");
+  const [minViews, setMinViews] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,8 +37,8 @@ export default function UserSearchScreen() {
   }, []);
 
   useEffect(() => {
-    filterData(searchText, selectedFilter, regionSearch);
-  }, [searchText, selectedFilter, regionSearch, newsData]);
+    filterData(searchText, selectedFilter, regionSearch, countrySearch, citySearch, dateSearch, minLikes, minViews);
+  }, [searchText, selectedFilter, regionSearch, countrySearch, citySearch, dateSearch, minLikes, minViews, newsData]);
 
   const fetchNews = async () => {
     try {
@@ -53,7 +58,7 @@ export default function UserSearchScreen() {
     }
   };
 
-  const filterData = (text, filter, region) => {
+  const filterData = (text, filter, region, country, city, date, likes, views) => {
     let filtered = [...newsData];
 
     // Apply search filter
@@ -68,6 +73,35 @@ export default function UserSearchScreen() {
       filtered = filtered.filter((item) =>
         item.region?.toLowerCase().includes(region.toLowerCase())
       );
+    }
+
+    // Apply country filter
+    if (country) {
+      filtered = filtered.filter((item) =>
+        item.country?.toLowerCase().includes(country.toLowerCase())
+      );
+    }
+
+    // Apply city filter
+    if (city) {
+      filtered = filtered.filter((item) =>
+        item.city?.toLowerCase().includes(city.toLowerCase())
+      );
+    }
+
+    // Apply date filter
+    if (date) {
+      filtered = filtered.filter((item) => item.date?.seconds >= new Date(date).getTime());
+    }
+
+    // Apply likes filter
+    if (likes) {
+      filtered = filtered.filter((item) => item.likes >= likes);
+    }
+
+    // Apply views filter
+    if (views) {
+      filtered = filtered.filter((item) => item.total_views >= views);
     }
 
     // Apply sorting logic
@@ -95,6 +129,11 @@ export default function UserSearchScreen() {
   const handleClearFilters = () => {
     setSelectedFilter("Relevance");
     setRegionSearch("");
+    setCountrySearch("");
+    setCitySearch("");
+    setDateSearch("");
+    setMinLikes("");
+    setMinViews("");
     setIsModalVisible(false);
   };
 
@@ -107,7 +146,7 @@ export default function UserSearchScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.date}>
-          {formattedDate} | {item.region}
+          {formattedDate} | {item.region} | {item.city} | {item.country}
         </Text>
         <Text style={styles.content}>{item.content_short || "No content available"}</Text>
       </View>
@@ -143,10 +182,52 @@ export default function UserSearchScreen() {
 
             {/* Search Region */}
             <TextInput
-              style={styles.regionInput}
+              style={styles.input}
               placeholder="Search region..."
               value={regionSearch}
               onChangeText={setRegionSearch}
+            />
+
+            {/* Search Country */}
+            <TextInput
+              style={styles.input}
+              placeholder="Search country..."
+              value={countrySearch}
+              onChangeText={setCountrySearch}
+            />
+
+            {/* Search City */}
+            <TextInput
+              style={styles.input}
+              placeholder="Search city..."
+              value={citySearch}
+              onChangeText={setCitySearch}
+            />
+
+            {/* Date filter */}
+            <TextInput
+              style={styles.input}
+              placeholder="Search by date (YYYY-MM-DD)..."
+              value={dateSearch}
+              onChangeText={setDateSearch}
+            />
+
+            {/* Likes filter */}
+            <TextInput
+              style={styles.input}
+              placeholder="Minimum likes..."
+              keyboardType="numeric"
+              value={minLikes}
+              onChangeText={setMinLikes}
+            />
+
+            {/* Views filter */}
+            <TextInput
+              style={styles.input}
+              placeholder="Minimum views..."
+              keyboardType="numeric"
+              value={minViews}
+              onChangeText={setMinViews}
             />
 
             {/* Sorting Options */}
@@ -195,4 +276,19 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "bold", marginBottom: 5 },
   date: { fontSize: 12, color: "#777", marginBottom: 10 },
   content: { fontSize: 14, color: "#333" },
+  modalBackground: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0, 0, 0, 0.5)" },
+  modalContainer: { width: 300, padding: 20, backgroundColor: "#fff", borderRadius: 10 },
+  modalHeader: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
+  input: { height: 40, borderColor: "#ccc", borderWidth: 1, paddingLeft: 10, borderRadius: 8, marginBottom: 15 },
+  sectionTitle: { fontSize: 16, marginBottom: 10 },
+  modalOption: { padding: 10, borderBottomWidth: 1, borderColor: "#ccc" },
+  selectedOption: { backgroundColor: "#007BFF" },
+  modalOptionText: { fontSize: 16 },
+  buttonContainer: { flexDirection: "row", justifyContent: "space-between" },
+  submitButton: { backgroundColor: "#007BFF", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 5 },
+  submitButtonText: { color: "#fff", fontSize: 16 },
+  clearButton: { backgroundColor: "#ccc", paddingVertical: 10, paddingHorizontal: 20, borderRadius: 5 },
+  clearButtonText: { fontSize: 16 },
+  closeButton: { marginTop: 15, alignItems: "center" },
+  closeButtonText: { fontSize: 16, color: "#007BFF" },
 });
