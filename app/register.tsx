@@ -4,49 +4,45 @@ import { Link, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 
-
 export default function RegisterScreen() {
-
-
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const isRegistartionDisabled = !email.includes("@") || password !== confirmPassword || password.length === 0;
+  // Disable registration if any field is invalid
+  const isRegistrationDisabled =
+    !username.trim() ||
+    !email.includes("@") ||
+    password !== confirmPassword ||
+    password.length === 0;
+
   const auth = getAuth();
 
   const handleRegistration = async () => {
-    /*try {
-      //const auth = getAuth();
-      //const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      //const user = userCredential.user;
-      //console.log("Registered in user:");
-      // Successful login
-      //Alert.alert("Success", "Regis in successfully!");
-      const storedEmail = window.localStorage.setItem("emailForSignIn");
-      const storedPassword = window.localStorage.setItem("passwordForSignIn");
-      router.replace("./preffered_news"); // Navigate after successful login
-    } catch (error: any) {
-      // Handle specific error cases
-      let errorMessage = "Registered in failed. Please try again.";
-      if (error.code === 'auth/invalid-email') {
-        errorMessage = "Invalid email address";
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect password";
-      }
-      Alert.alert("Error", errorMessage);
-    }*/
-
-    window.localStorage.setItem('emailForSignIn', email);
-    window.localStorage.setItem('passwordForSignIn', password);
-    console.log('Email:', email);
-    router.replace("./preffered_news"); // Navigate after successful login
+    // Store the username, email, and password locally for later use.
+    window.localStorage.setItem("usernameForSignIn", username);
+    window.localStorage.setItem("emailForSignIn", email);
+    window.localStorage.setItem("passwordForSignIn", password);
+    console.log("Username:", username);
+    console.log("Email:", email);
+    router.replace("./preffered_news"); // Navigate after successful registration
   };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Register</Text>
+
+      {/* Username Input */}
+      <TextInput
+        placeholder="User Name"
+        style={styles.input}
+        value={username}
+        onChangeText={setUsername}
+        autoCapitalize="none"
+      />
 
       {/* Email Input */}
       <TextInput
@@ -71,11 +67,7 @@ export default function RegisterScreen() {
           style={styles.eyeIcon}
           onPress={() => setShowPassword(!showPassword)}
         >
-          <Ionicons
-            name={showPassword ? "eye-off" : "eye"}
-            size={20}
-            color="#555"
-          />
+          <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#555" />
         </TouchableOpacity>
       </View>
 
@@ -92,28 +84,33 @@ export default function RegisterScreen() {
           style={styles.eyeIcon}
           onPress={() => setShowConfirmPassword(!showConfirmPassword)}
         >
-          <Ionicons
-            name={showConfirmPassword ? "eye-off" : "eye"}
-            size={20}
-            color="#555"
-          />
+          <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#555" />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity
-        style={[styles.button, isRegistartionDisabled && styles.disabledButton]}
-        disabled={isRegistartionDisabled}
+        style={[styles.button, isRegistrationDisabled && styles.disabledButton]}
+        disabled={isRegistrationDisabled}
         onPress={handleRegistration}
       >
-          <Text style={styles.buttonText}>Log In</Text>
+        <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#f9f9f9" },
-  title: { fontSize: 32, fontWeight: "bold", marginBottom: 20 },
+  container: { 
+    flex: 1, 
+    justifyContent: "center", 
+    padding: 20, 
+    backgroundColor: "#f9f9f9" 
+  },
+  title: { 
+    fontSize: 32, 
+    fontWeight: "bold", 
+    marginBottom: 20 
+  },
   input: {
     width: "100%",
     padding: 15,
@@ -133,8 +130,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     marginBottom: 15,
   },
-  passwordInput: { flex: 1, padding: 15 },
-  eyeIcon: { paddingHorizontal: 10 },
+  passwordInput: { 
+    flex: 1, 
+    padding: 15 
+  },
+  eyeIcon: { 
+    paddingHorizontal: 10 
+  },
   button: {
     width: "100%",
     backgroundColor: "#6200EE",
@@ -143,6 +145,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  disabledButton: { backgroundColor: "#ccc" },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  disabledButton: { 
+    backgroundColor: "#ccc" 
+  },
+  buttonText: { 
+    color: "#fff", 
+    fontSize: 16, 
+    fontWeight: "bold" 
+  },
 });

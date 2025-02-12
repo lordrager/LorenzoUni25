@@ -1,12 +1,19 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, CheckBox, Alert } from "react-native";
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  StyleSheet, 
+  ScrollView, 
+  Alert 
+} from "react-native";
 import { Link, router } from "expo-router";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "./firebaseConfig"; // Import your Firebase config
 
 export default function PreferredNewsScreen() {
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const tags = [
     "US", "UK", "War", "Politics", "Technology", "Sports", "Economy", "Health", "Science",
@@ -14,7 +21,7 @@ export default function PreferredNewsScreen() {
     "Food", "Fashion", "Finance", "History"
   ];
 
-  const handleTagSelect = (tag) => {
+  const handleTagSelect = (tag: string) => {
     setSelectedTags((prevSelectedTags) =>
       prevSelectedTags.includes(tag)
         ? prevSelectedTags.filter((item) => item !== tag)
@@ -22,7 +29,7 @@ export default function PreferredNewsScreen() {
     );
   };
 
-  const isSubmitDisabled = selectedTags.length < 4; // Ensure at least 4 tags are selected
+  const isSubmitDisabled = selectedTags.length < 4; // Require at least 4 tags
 
   const handleSubmit = async () => {
     if (isSubmitDisabled) {
@@ -30,29 +37,32 @@ export default function PreferredNewsScreen() {
       return;
     }
 
-    // Get stored email and password
+    // Retrieve stored email, password, and username
     const storedEmail = window.localStorage.getItem("emailForSignIn");
     const storedPassword = window.localStorage.getItem("passwordForSignIn");
+    const storedUsername = window.localStorage.getItem("usernameForSignIn");
 
-    if (storedEmail && storedPassword) {
+    if (storedEmail && storedPassword && storedUsername) {
       try {
         // Create user with Firebase Authentication
         const auth = getAuth();
         const userCredential = await createUserWithEmailAndPassword(auth, storedEmail, storedPassword);
-        const uid = userCredential.user.uid; // Get the generated user UID
+        const uid = userCredential.user.uid; // Get user UID
 
-        // Save user data to Firestore
+        // Save user data to Firestore including the username and selected tags
         const userRef = doc(db, "users", uid);
         await setDoc(userRef, {
           uid: uid,
+          username: storedUsername,
           email: storedEmail,
           tags: selectedTags,
           createdAt: new Date(),
         });
 
-        // Remove stored email and password after successful registration
+        // Remove stored data after successful registration
         window.localStorage.removeItem("emailForSignIn");
         window.localStorage.removeItem("passwordForSignIn");
+        window.localStorage.removeItem("usernameForSignIn");
 
         // Navigate to the home screen
         router.replace("/");
@@ -61,7 +71,7 @@ export default function PreferredNewsScreen() {
         Alert.alert("Registration Failed", "Error creating user. Please try again.");
       }
     } else {
-      Alert.alert("Error", "No email or password found in storage.");
+      Alert.alert("Error", "Registration data is missing.");
     }
   };
 
@@ -72,17 +82,28 @@ export default function PreferredNewsScreen() {
         Please select at least 4 tags that interest you.
       </Text>
 
-      {/* List of tags */}
-      <ScrollView style={styles.tagsContainer}>
-        {tags.map((tag, index) => (
-          <View key={index} style={styles.tagItem}>
-            <CheckBox
-              value={selectedTags.includes(tag)}
-              onValueChange={() => handleTagSelect(tag)}
-            />
-            <Text style={styles.tagText}>{tag}</Text>
-          </View>
-        ))}
+      {/* Tags List */}
+      <ScrollView contentContainerStyle={styles.tagsContainer}>
+        {tags.map((tag, index) => {
+          const isSelected = selectedTags.includes(tag);
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.tagButton,
+                isSelected && styles.tagButtonSelected,
+              ]}
+              onPress={() => handleTagSelect(tag)}
+            >
+              <Text style={[
+                styles.tagText,
+                isSelected && styles.tagTextSelected,
+              ]}>
+                {tag}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* Submit Button */}
@@ -103,22 +124,70 @@ export default function PreferredNewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: "#f9f9f9" },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
-  subtitle: { fontSize: 16, color: "#555", marginBottom: 20, textAlign: "center" },
-  tagsContainer: { width: "100%", maxHeight: 300, marginBottom: 20 },
-  tagItem: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-  tagText: { fontSize: 16, marginLeft: 10 },
+  container: { 
+    flex: 1, 
+    alignItems: "center", 
+    padding: 20, 
+    backgroundColor: "#f9f9f9" 
+  },
+  title: { 
+    fontSize: 30, 
+    fontWeight: "bold", 
+    marginBottom: 10, 
+    textAlign: "center" 
+  },
+  subtitle: { 
+    fontSize: 16, 
+    color: "#555", 
+    marginBottom: 20, 
+    textAlign: "center" 
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
+  tagButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    margin: 5,
+    borderRadius: 20,
+    backgroundColor: "#e0e0e0",
+  },
+  tagButtonSelected: {
+    backgroundColor: "#6200EE",
+  },
+  tagText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  tagTextSelected: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
   button: {
     width: "100%",
     backgroundColor: "#6200EE",
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
-    marginBottom: 15,
+    marginVertical: 15,
   },
-  disabledButton: { backgroundColor: "#ccc" },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  link: { marginTop: 15 },
-  linkText: { color: "#6200EE", fontSize: 16, textDecorationLine: "underline" },
+  disabledButton: { 
+    backgroundColor: "#ccc" 
+  },
+  buttonText: { 
+    color: "#fff", 
+    fontSize: 16, 
+    fontWeight: "bold" 
+  },
+  link: { 
+    marginTop: 10 
+  },
+  linkText: { 
+    color: "#6200EE", 
+    fontSize: 16, 
+    textDecorationLine: "underline" 
+  },
 });

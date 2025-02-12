@@ -6,11 +6,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithCredential,
+  OAuthProvider,
+} from "firebase/auth";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 
@@ -20,17 +27,14 @@ export default function IndexScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [location, setLocation] = useState(null);
   const [notificationPermission, setNotificationPermission] = useState(false);
+  
+  // Two separate states for the two modals
+  const [showLocationModal, setShowLocationModal] = useState(true);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const auth = getAuth();
 
   useEffect(() => {
-    const checkPermissions = async () => {
-      await requestLocationPermission();
-      await requestNotificationPermission();
-    };
-
-    checkPermissions();
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         console.log("User already logged in:", user.uid);
@@ -49,13 +53,11 @@ export default function IndexScreen() {
         console.warn("Location permission denied.");
         return;
       }
-
       let loc = await Location.getCurrentPositionAsync({});
       setLocation({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       });
-
       console.log("User location:", loc.coords);
     } catch (error) {
       console.error("Error getting location:", error);
@@ -77,13 +79,43 @@ export default function IndexScreen() {
     }
   };
 
+  // Location Modal Handlers
+  const handleAllowLocation = async () => {
+    await requestLocationPermission();
+    setShowLocationModal(false);
+    setShowNotificationModal(true); // Show notifications modal next
+  };
+
+  const handleDenyLocation = () => {
+    Alert.alert(
+      "Location Permission Required",
+      "Location permission is required for the app to work properly."
+    );
+    setShowLocationModal(false);
+    setShowNotificationModal(true); // Proceed to notifications modal even if location is denied
+  };
+
+  // Notification Modal Handlers
+  const handleAllowNotification = async () => {
+    await requestNotificationPermission();
+    setShowNotificationModal(false);
+  };
+
+  const handleDenyNotification = () => {
+    Alert.alert(
+      "Notification Permission Required",
+      "Notification permission is required for the app to work properly."
+    );
+    setShowNotificationModal(false);
+  };
+
   const handleLogin = async () => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log("Logged in user:", userCredential.user.uid);
       Alert.alert("Success", "Logged in successfully!");
       router.replace("/user_home");
-    } catch (error) {
+    } catch (error: any) {
       let errorMessage = "Login failed. Please try again.";
       if (error.code === "auth/invalid-email") errorMessage = "Invalid email address";
       if (error.code === "auth/wrong-password") errorMessage = "Incorrect password";
@@ -96,8 +128,77 @@ export default function IndexScreen() {
     router.replace("/register");
   };
 
+  // Social login functions (placeholders—you can implement your Firebase logic here)
+  const handleGoogleLogin = async () => {
+    try {
+      Alert.alert("Google Sign In", "Google sign in pressed (logic not implemented)");
+    } catch (error) {
+      console.error("Error with Google sign in:", error);
+      Alert.alert("Error", "Google sign in failed");
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      Alert.alert("Apple Sign In", "Apple sign in pressed (logic not implemented)");
+    } catch (error) {
+      console.error("Error with Apple sign in:", error);
+      Alert.alert("Error", "Apple sign in failed");
+    }
+  };
+
+  // Facebook login function
+  const handleFacebookLogin = async () => {
+    try {
+      Alert.alert("Facebook Sign In", "Facebook sign in pressed (logic not implemented)");
+    } catch (error) {
+      console.error("Error with Facebook sign in:", error);
+      Alert.alert("Error", "Facebook sign in failed");
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* Modal for Location Permission */}
+      <Modal visible={showLocationModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Location Permission Required</Text>
+            <Text style={styles.modalMessage}>
+              This app requires access to your location. Please grant location permission.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalButton} onPress={handleAllowLocation}>
+                <Text style={styles.modalButtonText}>Allow</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.modalButtonDeny]} onPress={handleDenyLocation}>
+                <Text style={styles.modalButtonText}>Deny</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal for Notification Permission */}
+      <Modal visible={showNotificationModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Notification Permission Required</Text>
+            <Text style={styles.modalMessage}>
+              This app requires access to notifications. Please grant notification permission.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalButton} onPress={handleAllowNotification}>
+                <Text style={styles.modalButtonText}>Allow</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.modalButtonDeny]} onPress={handleDenyNotification}>
+                <Text style={styles.modalButtonText}>Deny</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Text style={styles.title}>Welcome</Text>
       <Text style={styles.subtitle}>Login or Register to Continue</Text>
 
@@ -139,25 +240,47 @@ export default function IndexScreen() {
         <Text style={styles.buttonText}>Register</Text>
       </TouchableOpacity>
 
+      {/* Social Login Buttons */}
+      <View style={styles.socialContainer}>
+        <TouchableOpacity style={styles.socialButton} onPress={handleGoogleLogin}>
+          <Ionicons name="logo-google" size={24} color="#EA4335" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialButton} onPress={handleAppleLogin}>
+          <Ionicons name="logo-apple" size={24} color="#000" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.socialButton} onPress={handleFacebookLogin}>
+          <Ionicons name="logo-facebook" size={24} color="#3b5998" />
+        </TouchableOpacity>
+      </View>
+
       {/* Display Location (For Debugging) */}
       {location && (
         <Text style={styles.infoText}>
           Location: {location.latitude}, {location.longitude}
         </Text>
       )}
-
-      {/* Display Notification Status (For Debugging) */}
-      <Text style={styles.infoText}>
-        Notifications: {notificationPermission ? "Enabled" : "Disabled"}
-      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20, backgroundColor: "#f9f9f9" },
-  title: { fontSize: 32, fontWeight: "bold", marginBottom: 10 },
-  subtitle: { fontSize: 16, color: "#555", marginBottom: 20 },
+  container: { 
+    flex: 1, 
+    justifyContent: "center", 
+    alignItems: "center", 
+    padding: 20, 
+    backgroundColor: "#f9f9f9" 
+  },
+  title: { 
+    fontSize: 32, 
+    fontWeight: "bold", 
+    marginBottom: 10 
+  },
+  subtitle: { 
+    fontSize: 16, 
+    color: "#555", 
+    marginBottom: 20 
+  },
   input: {
     width: "100%",
     padding: 15,
@@ -177,8 +300,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     marginBottom: 15,
   },
-  passwordInput: { flex: 1, padding: 15 },
-  eyeIcon: { paddingHorizontal: 10 },
+  passwordInput: { 
+    flex: 1, 
+    padding: 15 
+  },
+  eyeIcon: { 
+    paddingHorizontal: 10 
+  },
   button: {
     width: "100%",
     backgroundColor: "#6200EE",
@@ -187,7 +315,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  disabledButton: { backgroundColor: "#ccc" },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  infoText: { fontSize: 14, color: "#666", marginTop: 10 },
+  disabledButton: { 
+    backgroundColor: "#ccc" 
+  },
+  buttonText: { 
+    color: "#fff", 
+    fontSize: 16, 
+    fontWeight: "bold" 
+  },
+  infoText: { 
+    fontSize: 14, 
+    color: "#666", 
+    marginTop: 10 
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "80%",
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  modalMessage: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    backgroundColor: "#6200EE",
+    padding: 10,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: "center",
+  },
+  modalButtonDeny: {
+    backgroundColor: "#D32F2F",
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  socialContainer: {
+    flexDirection: "row",
+    marginTop: 10,
+  },
+  socialButton: {
+    width: 50,
+    height: 50,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 5,
+    borderRadius: 8,
+  },
 });
