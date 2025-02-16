@@ -8,25 +8,43 @@ export default function UserAchievements() {
   const auth = getAuth();
   const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Toggle for using mock data for UI testing
+  const useMockData = true;
+
+  // Define mock achievements
+  const mockAchievements = [
+    { id: '1', icon: 'trophy', title: 'First Win', description: 'Won your first game.' },
+    { id: '2', icon: 'star', title: 'All-Star', description: 'Scored in every game.' },
+    { id: '3', icon: 'rocket', title: 'Rocket Start', description: 'Started your journey with a bang.' },
+  ];
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        console.log("User already logged in:", user.uid);
-        try {
-          const userAch = await getUserAchievements(user.uid);
-          setAchievements(userAch);
-        } catch (error) {
-          console.error("Error fetching achievements:", error);
+    if (useMockData) {
+      // Simulate a delay for UI preview
+      setTimeout(() => {
+        setAchievements(mockAchievements);
+        setLoading(false);
+      }, 1000);
+    } else {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          console.log("User already logged in:", user.uid);
+          try {
+            const userAch = await getUserAchievements(user.uid);
+            setAchievements(userAch);
+          } catch (error) {
+            console.error("Error fetching achievements:", error);
+          }
+        } else {
+          console.log("User not logged in");
+          // Optionally, you can load mock data here if needed.
         }
-      } else {
-        console.log("User not logged in");
-        // Redirect logic can be added here if needed.
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      });
 
-    return () => unsubscribe(); // Cleanup on unmount
+      return () => unsubscribe(); // Cleanup on unmount
+    }
   }, []);
 
   if (loading) {

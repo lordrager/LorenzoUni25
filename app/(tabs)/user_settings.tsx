@@ -1,47 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, Switch, Image, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator 
+  View, Text, Switch, Image, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView 
 } from 'react-native';
 import { getAuth, signOut, onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'expo-router';
-import { getUser, updateUserNotifications, updateProfileIcon, updateUsername } from '@/class/User'; // Import Firebase functions
+import { getUser, updateUserNotifications, updateProfileIcon, updateUsername } from '@/class/User';
 
 const UserSettings = () => {
   const [user, setUser] = useState(null);
   const [notifications, setNotifications] = useState(false);
   const [isLogoutModalVisible, setLogoutModalVisible] = useState(false);
   const [isProfileIconModalVisible, setProfileIconModalVisible] = useState(false);
+  const [isUsernameModalVisible, setUsernameModalVisible] = useState(false);
   const [newProfileIcon, setNewProfileIcon] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [error, setError] = useState("");
   const auth = getAuth();
   const router = useRouter();
 
   useEffect(() => {
-    const fetchUserData = async (uid) => {
-      try {
-        if (!uid) return;
-        const userData = await getUser(uid);
-        if (userData) {
-          setUser(userData);
-          setNotifications(userData.notificationsEnabled);
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        await fetchUserData(currentUser.uid);
+        console.log("User logged in:", currentUser.uid);
+        try {
+          const userData = await getUser(currentUser.uid);
+          if (userData && userData.notifications) {
+            setNotifications(userData.notifications);
+          } else {
+            setNotifications([]); // No notifications available
+          }
+          setUser(userData);
+          // Read dark mode setting from window.localStorage
+          const storedDarkMode = window.localStorage.getItem("darkMode");
+          if (storedDarkMode !== null) {
+            setDarkMode(JSON.parse(storedDarkMode));
+          }
+        } catch (err) {
+          console.error("Failed to load notifications.");
+          setError("Failed to load notifications.");
+        } finally {
+          setLoading(false);
+        }
       } else {
-        router.replace('/'); // Redirect to login if not logged in
+        console.log("User not logged in");
+        router.replace("/"); // Redirect if not logged in
       }
     });
 
-    return () => unsubscribe();
+    return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
   const toggleNotifications = async () => {
@@ -61,9 +69,19 @@ const UserSettings = () => {
 
   const changeUsername = async () => {
     if (newUsername) {
-      await updateUsername(user.id, newUsername);
-      setUser({ ...user, profileName: newUsername });
+      const success = await updateUsername(user.uid, newUsername);
+      if (success) {
+        setUser({ ...user, profileName: newUsername });
+        console.log("Username updated:", newUsername);
+      }
     }
+  };
+
+  const handleDarkModeToggle = (value) => {
+    setDarkMode(value);
+    window.localStorage.setItem('darkMode', JSON.stringify(value));
+    setUser({ ...user, darkMode: value });
+    console.log("Dark mode set to", value);
   };
 
   const confirmLogout = async () => {
@@ -95,7 +113,7 @@ const UserSettings = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, darkMode && styles.darkContainer]}>
       {/* Profile Section */}
       <View style={styles.profileSection}>
         <Image source={{ uri: user.profileIcon || 'https://example.com/user-avatar.png' }} style={styles.profileIcon} />
@@ -103,17 +121,17 @@ const UserSettings = () => {
         <TouchableOpacity onPress={() => setProfileIconModalVisible(true)} style={styles.iconChangeButton}>
           <Text style={styles.iconChangeText}>Change Profile Icon</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setNewUsername(user.profileName)} style={styles.iconChangeButton}>
+        <TouchableOpacity onPress={() => { setNewUsername(user.profileName); setUsernameModalVisible(true); }} style={styles.iconChangeButton}>
           <Text style={styles.iconChangeText}>Change Username</Text>
         </TouchableOpacity>
       </View>
 
       {/* User Info */}
       <View style={styles.infoContainer}>
+        <Text style={styles.infoText}>Streak: {user.streak} days</Text>
         <Text style={styles.infoText}>Level: {user.level}</Text>
-        <Text style={styles.infoText}>HP Needed: {user.hpNeededForNextLevel}</Text>
+        <Text style={styles.infoText}>Experience: {user.experience} XP</Text>
         <Text style={styles.infoText}>Rank: {user.rank}</Text>
-        <Text style={styles.infoText}>Login Streak: {user.loginStreak} days</Text>
       </View>
 
       {/* Notifications Toggle */}
@@ -122,22 +140,39 @@ const UserSettings = () => {
         <Switch value={notifications} onValueChange={toggleNotifications} />
       </View>
 
-      {/* Leaderboards */}
-      <Text style={styles.sectionTitle}>Leaderboards</Text>
-      {/* Example leaderboard data */}
-      <FlatList
-        data={user.leaderboard || []}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <Text style={styles.newsItem}>• {item.username}: {item.score}</Text>}
-      />
+      {/* Dark Mode Toggle */}
+      <View style={styles.darkModeContainer}>
+        <Text style={styles.darkModeText}>Dark Mode</Text>
+        <Switch value={darkMode} onValueChange={handleDarkModeToggle} />
+      </View>
 
-      {/* Liked News Section */}
-      <Text style={styles.sectionTitle}>Liked News</Text>
-      <FlatList
-        data={user.likedNews}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <Text style={styles.newsItem}>• {item.title}</Text>}
-      />
+      {/* Leaderboards Section (Touchable) */}
+      <TouchableOpacity onPress={() => router.push('/leaderboard')} style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle}>Leaderboards</Text>
+        <FlatList
+          data={user.leaderboard || []}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <Text style={styles.newsItem}>• {item.username}: {item.score}</Text>}
+        />
+      </TouchableOpacity>
+
+      {/* Liked News Section (Touchable) */}
+      <TouchableOpacity onPress={() => router.push('/liked_news')} style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle}>Liked News</Text>
+        <FlatList
+          data={user.likedNews}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <Text style={styles.newsItem}>• {item.title}</Text>}
+        />
+      </TouchableOpacity>
+
+      {/* Change Password Button (placed under Liked News) */}
+      <TouchableOpacity 
+        style={styles.changePasswordButton} 
+        onPress={() => router.push('/change-password')}
+      >
+        <Text style={styles.changePasswordButtonText}>Change Password</Text>
+      </TouchableOpacity>
 
       {/* Logout Button */}
       <TouchableOpacity 
@@ -160,6 +195,7 @@ const UserSettings = () => {
             <TextInput
               style={styles.inputField}
               placeholder="Enter Image URL"
+              placeholderTextColor="#ccc"
               value={newProfileIcon}
               onChangeText={setNewProfileIcon}
             />
@@ -167,6 +203,36 @@ const UserSettings = () => {
               <Text style={styles.modalButtonText}>Change Icon</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelButton} onPress={() => setProfileIconModalVisible(false)}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Username Change Modal */}
+      <Modal
+        visible={isUsernameModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setUsernameModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Change Username</Text>
+            <TextInput
+              style={styles.inputField}
+              placeholder="Enter new username"
+              placeholderTextColor="#ccc"
+              value={newUsername}
+              onChangeText={setNewUsername}
+            />
+            <TouchableOpacity 
+              style={styles.modalButton} 
+              onPress={() => { changeUsername(); setUsernameModalVisible(false); }}
+            >
+              <Text style={styles.modalButtonText}>Change Username</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => setUsernameModalVisible(false)}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -201,44 +267,195 @@ const UserSettings = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#333', alignItems: 'center' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  profileSection: { alignItems: 'center', marginBottom: 20 },
-  profileIcon: { width: 100, height: 100, borderRadius: 50, marginBottom: 10, borderWidth: 2, borderColor: '#ddd' },
-  profileName: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
-  iconChangeButton: { marginTop: 10, padding: 10, backgroundColor: '#007AFF', borderRadius: 5 },
-  iconChangeText: { color: '#fff' },
-
-  infoContainer: { backgroundColor: '#444', padding: 15, borderRadius: 10, width: '100%', marginBottom: 20 },
-  infoText: { fontSize: 16, color: '#ddd', paddingVertical: 2 },
-
-  toggleContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#444', padding: 15, borderRadius: 10, width: '100%', marginBottom: 20 },
-  toggleText: { fontSize: 16, color: '#fff' },
-
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', alignSelf: 'flex-start', marginBottom: 10, color: '#fff' },
-  newsItem: { fontSize: 14, color: '#bbb', paddingVertical: 5 },
-
-  logoutButton: { marginTop: 20, backgroundColor: '#E63946', paddingVertical: 10, paddingHorizontal: 40, borderRadius: 10 },
-  logoutText: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
-  modalContent: { backgroundColor: '#444', padding: 20, borderRadius: 10, width: '80%', alignItems: 'center' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#fff' },
-  modalText: { fontSize: 16, color: '#ddd', textAlign: 'center', marginBottom: 20 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-  modalButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 5, marginHorizontal: 5 },
-  cancelButton: { backgroundColor: '#888' },
-  confirmButton: { backgroundColor: '#E63946' },
-  cancelButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  confirmButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-
-  inputField: { height: 40, borderColor: '#ddd', borderWidth: 1, borderRadius: 5, width: '100%', marginBottom: 10, paddingHorizontal: 10, color: '#fff' },
+  container: { 
+    flexGrow: 1,
+    padding: 15, 
+    backgroundColor: '#333', 
+    alignItems: 'center' 
+  },
+  darkContainer: { backgroundColor: '#000' },
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  profileSection: { 
+    alignItems: 'center', 
+    marginBottom: 15 
+  },
+  profileIcon: { 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
+    marginBottom: 8, 
+    borderWidth: 2, 
+    borderColor: '#ddd' 
+  },
+  profileName: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  iconChangeButton: { 
+    marginTop: 5, 
+    padding: 8, 
+    backgroundColor: '#007AFF', 
+    borderRadius: 5 
+  },
+  iconChangeText: { 
+    color: '#fff', 
+    fontSize: 14 
+  },
+  infoContainer: { 
+    backgroundColor: '#444', 
+    padding: 10, 
+    borderRadius: 10, 
+    width: '100%', 
+    marginBottom: 15 
+  },
+  infoText: { 
+    fontSize: 14, 
+    color: '#ddd', 
+    paddingVertical: 2 
+  },
+  toggleContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    backgroundColor: '#444', 
+    padding: 10, 
+    borderRadius: 10, 
+    width: '100%', 
+    marginBottom: 15 
+  },
+  toggleText: { 
+    fontSize: 14, 
+    color: '#fff' 
+  },
+  darkModeContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    backgroundColor: '#444', 
+    padding: 10, 
+    borderRadius: 10, 
+    width: '100%', 
+    marginBottom: 15 
+  },
+  darkModeText: { 
+    fontSize: 14, 
+    color: '#fff' 
+  },
+  sectionContainer: {
+    width: '100%',
+    marginBottom: 15,
+    backgroundColor: '#444',
+    borderRadius: 10,
+    padding: 10,
+  },
+  sectionTitle: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#fff',
+    marginBottom: 5,
+  },
+  newsItem: { 
+    fontSize: 12, 
+    color: '#bbb', 
+    paddingVertical: 3 
+  },
+  changePasswordButton: { 
+    marginVertical: 10, 
+    backgroundColor: '#007AFF', 
+    paddingVertical: 8, 
+    paddingHorizontal: 15, 
+    borderRadius: 10 
+  },
+  changePasswordButtonText: { 
+    fontSize: 14, 
+    color: '#fff', 
+    fontWeight: 'bold' 
+  },
+  logoutButton: { 
+    marginTop: 15, 
+    backgroundColor: '#E63946', 
+    paddingVertical: 8, 
+    paddingHorizontal: 20, 
+    borderRadius: 10 
+  },
+  logoutText: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  modalContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(0, 0, 0, 0.5)' 
+  },
+  modalContent: { 
+    backgroundColor: '#444', 
+    padding: 20, 
+    borderRadius: 10, 
+    width: '80%', 
+    alignItems: 'center' 
+  },
+  modalTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginBottom: 10, 
+    color: '#fff' 
+  },
+  modalText: { 
+    fontSize: 14, 
+    color: '#ddd', 
+    textAlign: 'center', 
+    marginBottom: 20 
+  },
+  modalButtons: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%' 
+  },
+  modalButton: { 
+    flex: 1, 
+    paddingVertical: 10, 
+    alignItems: 'center', 
+    borderRadius: 5, 
+    marginHorizontal: 5 
+  },
+  cancelButton: { 
+    backgroundColor: '#888' 
+  },
+  confirmButton: { 
+    backgroundColor: '#E63946' 
+  },
+  cancelButtonText: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  confirmButtonText: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    color: '#fff' 
+  },
+  inputField: { 
+    height: 35, 
+    borderColor: '#ddd', 
+    borderWidth: 1, 
+    borderRadius: 5, 
+    width: '100%', 
+    marginBottom: 10, 
+    paddingHorizontal: 8, 
+    color: '#fff' 
+  },
 });
 
 export default UserSettings;

@@ -234,6 +234,12 @@ export default function IndexScreen() {
       >
         <Text style={styles.buttonText}>Log In</Text>
       </TouchableOpacity>
+      <TouchableOpacity onPress={() => router.push("/forgot_password")}>
+  <Text style={{ color: "#007bff", textAlign: "center", marginTop: 10 }}>
+    Forgot Password?
+  </Text>
+</TouchableOpacity>
+
 
       {/* Register Button */}
       <TouchableOpacity style={styles.button} onPress={handleRegister}>

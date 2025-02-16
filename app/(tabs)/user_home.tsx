@@ -5,13 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import ArticleModal from "../../components/articlemodal";
+import StreakModal from "@/components/streakmodal";
 import { router } from "expo-router";
 import { getRecentNewsByTags } from "../../class/News";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getUser } from "@/class/User";
-import { addWatchedNews } from "@/class/News"; // Import function to save watched news
+import { getUser, updateStreak } from "@/class/User";
+import { addWatchedNews } from "@/class/News";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+
+const { height } = Dimensions.get("window");
 
 export default function UserHomeScreen() {
   const [newsArticles, setNewsArticles] = useState([]);
@@ -20,45 +25,67 @@ export default function UserHomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loggedUser, setLoggedUser] = useState(null);
-  
+  const [firstLoginToday, setFirstLoginToday] = useState(false);
+
   const auth = getAuth();
   const currentArticle = newsArticles[currentArticleIndex];
+
+  useEffect(() => {    
+  }, [firstLoginToday]);
 
   useEffect(() => {
     const fetchUserAndNews = async () => {
       try {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
           if (!user) {
-            console.log("User not logged in");
             router.replace("/"); // Redirect to login
             return;
           }
 
-          console.log("User logged in:", user.uid);
-          const userData = await getUser(user.uid);
+          let userData = await getUser(user.uid);
+          if (!userData) return;
+
+          // Compute previous login info BEFORE updating the streak.
+          const prevLastLogin = userData.last_login
+            ? new Date(userData.last_login)
+            : null;
+          const now = new Date();
+          const todayString = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+          const prevLoginString = prevLastLogin
+            ? `${prevLastLogin.getFullYear()}-${prevLastLogin.getMonth() + 1}-${prevLastLogin.getDate()}`
+            : "";
+          
+          // isFirstLogin is true if the previous login is not today.
+          const isFirstLogin = prevLoginString !== todayString;
+          // Update the streak (which updates last_login) and re-fetch user data.
+          await updateStreak(user.uid);
+          userData = await getUser(user.uid);
           setLoggedUser(userData);
 
+          // Fetch articles only after updating the streak.
           if (userData?.tags?.length) {
-            console.log("User tags:", userData.tags);
-
-            // Fetch all news by tags
+            console.log(userData.tags);
             const newsSnapshot = await getRecentNewsByTags(userData.tags);
-            console.log("Fetched news:", newsSnapshot);
-            // Filter out watched news
             const unseenNews = newsSnapshot.filter(
               (news) => !userData.watched_news?.includes(news.id)
             );
-            console.log("Unseen news:", unseenNews);
             setNewsArticles(unseenNews);
-          } else {
-            console.log("No tags found for user.");
           }
 
+          // Finished loading articles.
           setLoading(false);
-        });
 
-        return () => unsubscribe(); // Cleanup on unmount
-      } catch (err) {
+          // Show the streak modal if it is the first login today and auto-hide it after 3 seconds.
+          if (isFirstLogin) {
+
+            setFirstLoginToday(true);
+            setTimeout(() => {
+              setFirstLoginToday(false);
+            }, 3000);
+          }
+        });
+        return () => unsubscribe();
+      } catch (err: any) {
         setError(err.message);
         setLoading(false);
       }
@@ -70,14 +97,12 @@ export default function UserHomeScreen() {
   const markAsWatched = async () => {
     if (loggedUser && currentArticle) {
       await addWatchedNews(loggedUser.id, currentArticle.id);
-      
-      // Remove the watched article from the list
       setNewsArticles((prevArticles) =>
         prevArticles.filter((news) => news.id !== currentArticle.id)
       );
-
-      // Move to the next article
-      setCurrentArticleIndex((prev) => (prev < newsArticles.length - 1 ? prev + 1 : 0));
+      setCurrentArticleIndex((prev) =>
+        prev < newsArticles.length - 1 ? prev + 1 : 0
+      );
     }
   };
 
@@ -94,6 +119,15 @@ export default function UserHomeScreen() {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>Error: {error}</Text>
+        {loggedUser && (
+          <StreakModal
+            visible={firstLoginToday}
+            streak={loggedUser.streak}
+            level={loggedUser.level}
+            experience={loggedUser.experience}
+            onClose={() => setFirstLoginToday(false)}
+          />
+        )}
       </View>
     );
   }
@@ -102,6 +136,15 @@ export default function UserHomeScreen() {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.noArticlesText}>No articles available</Text>
+        {loggedUser && (
+          <StreakModal
+            visible={firstLoginToday}
+            streak={loggedUser.streak}
+            level={loggedUser.level}
+            experience={loggedUser.experience}
+            onClose={() => setFirstLoginToday(false)}
+          />
+        )}
       </View>
     );
   }
@@ -117,7 +160,6 @@ export default function UserHomeScreen() {
         <Text style={styles.content} numberOfLines={3}>
           {currentArticle.content_short}
         </Text>
-
         <View style={styles.buttonsContainer}>
           <TouchableOpacity
             style={[styles.button, styles.dislikeButton]}
@@ -125,7 +167,6 @@ export default function UserHomeScreen() {
           >
             <Text style={styles.buttonText}>Dislike</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.button, styles.likeButton]}
             onPress={markAsWatched}
@@ -140,24 +181,94 @@ export default function UserHomeScreen() {
         article={currentArticle}
         onClose={() => setModalVisible(false)}
       />
+
+      {loggedUser && (
+        <StreakModal
+          visible={firstLoginToday}
+          streak={loggedUser.streak}
+          level={loggedUser.level}
+          experience={loggedUser.experience}
+          onClose={() => setFirstLoginToday(false)}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#f0f2f5" },
-  centerContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
-  newsCard: { backgroundColor: "white", borderRadius: 12, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
-  header: { fontSize: 22, fontWeight: "600", color: "#1a1a1a", marginBottom: 15, textAlign: "center" },
-  content: { fontSize: 16, lineHeight: 24, color: "#444", marginBottom: 25 },
-  buttonsContainer: { flexDirection: "row", justifyContent: "space-between", marginTop: 15 },
-  button: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center", marginHorizontal: 5 },
-  likeButton: { backgroundColor: "#007bff" },
-  dislikeButton: { backgroundColor: "#dc3545" },
-  buttonText: { color: "white", fontSize: 16, fontWeight: "500" },
-  loadingText: { marginTop: 20, fontSize: 16, color: "#666" },
-  errorText: { fontSize: 16, color: "#dc3545", textAlign: "center" },
-  noArticlesText: { fontSize: 16, color: "#666", textAlign: "center" },
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#f0f2f5",
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  newsCard: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  content: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#444",
+    marginBottom: 25,
+  },
+  buttonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 15,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  likeButton: {
+    backgroundColor: "#007bff",
+  },
+  dislikeButton: {
+    backgroundColor: "#dc3545",
+  },
+  buttonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#dc3545",
+    textAlign: "center",
+  },
+  noArticlesText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
 });
 
 export default UserHomeScreen;

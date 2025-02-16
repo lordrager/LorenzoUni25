@@ -51,9 +51,8 @@ export const getRecentNewsByTags = async (tags) => {
   // Calculate date threshold (2 weeks ago)
   const twoWeeksAgo = new Date();
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-  const twoWeeksAgoISO = twoWeeksAgo.toISOString();
   try {
-    const newsCollection = await collection(db, "news").withConverter(newsConverter);
+    const newsCollection = collection(db, "news").withConverter(newsConverter);
     const q = query(
       newsCollection,
       where("tags", "array-contains-any", tags),
@@ -61,9 +60,7 @@ export const getRecentNewsByTags = async (tags) => {
       orderBy("date", "desc"),
       limit(10)
     );
-
     const querySnapshot = await getDocs(q);
-    //return querySnapshot;
     return querySnapshot.docs.map(doc => doc.data());
   } catch (error) {
     console.error("Error fetching recent news:", error);
@@ -129,21 +126,15 @@ export const addMockNewsData = async () => {
 
 export const updateNewsByTitle = async (title, updatedFields) => {
   try {
-    // Reference to the news collection
     const newsCollection = collection(db, "news").withConverter(newsConverter);
-    // Query to find the news article by title
     const q = query(newsCollection, where("title", "==", title));
     const querySnapshot = await getDocs(q);
-
     if (querySnapshot.empty) {
       console.log("No news article found with the given title.");
       return false;
     }
-
-    // Assuming titles are unique, update the first matching document
     const newsDocRef = querySnapshot.docs[0].ref;
     await updateDoc(newsDocRef, updatedFields, { merge: true });
-
     console.log(`News article "${title}" updated successfully.`);
     return true;
   } catch (error) {
@@ -154,14 +145,43 @@ export const updateNewsByTitle = async (title, updatedFields) => {
 
 export const addWatchedNews = async (userId, newsId) => {
   if (!userId || !newsId) return;
-
   try {
     const userRef = doc(db, "users", userId);
     await updateDoc(userRef, {
-      watched_news: arrayUnion(newsId), // Add news ID to watched list
+      watched_news: arrayUnion(newsId),
     });
     console.log(`News ${newsId} added to watched_news`);
   } catch (error) {
     console.error("Error adding watched news:", error);
+  }
+};
+
+// New function: Get watched news for a user
+export const getLikedNews = async (userId: string) => {
+  try {
+    // Get the user's document
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) {
+      console.error("User not found");
+      return [];
+    }
+    const userData = userSnap.data();
+    // Extract the liked_news array (list of news IDs)
+    const likedNewsIds: string[] = userData.liked_news || [];
+    
+    // For each news ID, fetch the corresponding news document
+    const newsPromises = likedNewsIds.map(async (newsId) => {
+      const newsRef = doc(db, "news", newsId).withConverter(newsConverter);
+      const newsSnap = await getDoc(newsRef);
+      return newsSnap.exists() ? newsSnap.data() : null;
+    });
+    
+    const newsResults = await Promise.all(newsPromises);
+    // Return only the non-null news items
+    return newsResults.filter((news) => news !== null);
+  } catch (error) {
+    console.error("Error fetching liked news:", error);
+    return [];
   }
 };
