@@ -356,7 +356,52 @@ export const addUserAchievement = async (uid: string, achievement: string): Prom
   }
 };
 
+export const addLikedNews = async (uid: string, newsId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    // Update user's liked_news and watched_news fields
+    await updateDoc(userRef, {
+      liked_news: arrayUnion(newsId),
+      watched_news: arrayUnion(newsId)
+    });
+    
+    // Update the news document's likes field by incrementing it by 1
+    const newsRef = doc(db, "news", newsId);
+    await updateDoc(newsRef, {
+      likes: increment(1)
+    });
 
+    console.log(`News ${newsId} added to liked_news and watched_news for user ${uid}; likes incremented.`);
+    return true;
+  } catch (error) {
+    console.error("Error adding liked news:", error);
+    return false;
+  }
+};
+
+// Function to add a disliked news article and increment its dislike count
+export const addDislikedNews = async (uid: string, newsId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    // Update user's disliked_news and watched_news fields
+    await updateDoc(userRef, {
+      disliked_news: arrayUnion(newsId),
+      watched_news: arrayUnion(newsId)
+    });
+    
+    // Update the news document's dislikes field by incrementing it by 1
+    const newsRef = doc(db, "news", newsId);
+    await updateDoc(newsRef, {
+      dislikes: increment(1)
+    });
+
+    console.log(`News ${newsId} added to disliked_news and watched_news for user ${uid}; dislikes incremented.`);
+    return true;
+  } catch (error) {
+    console.error("Error adding disliked news:", error);
+    return false;
+  }
+};
 // Example function to add mock news data (assuming News and newsConverter are defined)
 export const addMockNewsData = async () => {
   const mockNews = [

@@ -12,8 +12,13 @@ import StreakModal from "@/components/streakmodal";
 import { router } from "expo-router";
 import { getRecentNewsByTags } from "../../class/News";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getUser, updateStreak } from "@/class/User";
-import { addWatchedNews } from "@/class/News";
+import {
+  getUser,
+  updateStreak,
+  addWatchedNews,
+  addLikedNews,
+  addDislikedNews,
+} from "@/class/User";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 
 const { height } = Dimensions.get("window");
@@ -30,8 +35,7 @@ export default function UserHomeScreen() {
   const auth = getAuth();
   const currentArticle = newsArticles[currentArticleIndex];
 
-  useEffect(() => {    
-  }, [firstLoginToday]);
+  useEffect(() => {}, [firstLoginToday]);
 
   useEffect(() => {
     const fetchUserAndNews = async () => {
@@ -60,11 +64,11 @@ export default function UserHomeScreen() {
           // Update the streak (which updates last_login) and re-fetch user data.
           await updateStreak(user.uid);
           userData = await getUser(user.uid);
-          setLoggedUser(userData);
+          // Ensure loggedUser has an id property
+          setLoggedUser({ ...userData, id: user.uid });
 
           // Fetch articles only after updating the streak.
           if (userData?.tags?.length) {
-            console.log(userData.tags);
             const newsSnapshot = await getRecentNewsByTags(userData.tags);
             const unseenNews = newsSnapshot.filter(
               (news) => !userData.watched_news?.includes(news.id)
@@ -77,7 +81,6 @@ export default function UserHomeScreen() {
 
           // Show the streak modal if it is the first login today and auto-hide it after 3 seconds.
           if (isFirstLogin) {
-
             setFirstLoginToday(true);
             setTimeout(() => {
               setFirstLoginToday(false);
@@ -94,15 +97,35 @@ export default function UserHomeScreen() {
     fetchUserAndNews();
   }, []);
 
-  const markAsWatched = async () => {
+  // New logic for Like and Dislike buttons:
+  const handleLike = async () => {
     if (loggedUser && currentArticle) {
-      await addWatchedNews(loggedUser.id, currentArticle.id);
-      setNewsArticles((prevArticles) =>
-        prevArticles.filter((news) => news.id !== currentArticle.id)
-      );
-      setCurrentArticleIndex((prev) =>
-        prev < newsArticles.length - 1 ? prev + 1 : 0
-      );
+      console.log("Liked article:", currentArticle.title);
+      console.log("User ID:", loggedUser.id);
+      console.log("Article ID:", currentArticle.id);
+      const success = await addLikedNews(loggedUser.id, currentArticle.id);
+      if (success) {
+        setNewsArticles((prevArticles) =>
+          prevArticles.filter((news) => news.id !== currentArticle.id)
+        );
+        setCurrentArticleIndex((prev) =>
+          prev < newsArticles.length - 1 ? prev + 1 : 0
+        );
+      }
+    }
+  };
+
+  const handleDislike = async () => {
+    if (loggedUser && currentArticle) {
+      const success = await addDislikedNews(loggedUser.id, currentArticle.id);
+      if (success) {
+        setNewsArticles((prevArticles) =>
+          prevArticles.filter((news) => news.id !== currentArticle.id)
+        );
+        setCurrentArticleIndex((prev) =>
+          prev < newsArticles.length - 1 ? prev + 1 : 0
+        );
+      }
     }
   };
 
@@ -163,13 +186,13 @@ export default function UserHomeScreen() {
         <View style={styles.buttonsContainer}>
           <TouchableOpacity
             style={[styles.button, styles.dislikeButton]}
-            onPress={markAsWatched}
+            onPress={handleDislike}
           >
             <Text style={styles.buttonText}>Dislike</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, styles.likeButton]}
-            onPress={markAsWatched}
+            onPress={handleLike}
           >
             <Text style={styles.buttonText}>Like</Text>
           </TouchableOpacity>

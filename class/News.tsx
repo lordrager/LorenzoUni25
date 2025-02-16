@@ -61,7 +61,8 @@ export const getRecentNewsByTags = async (tags) => {
       limit(10)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data());
+    // Map each document to include its id
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error fetching recent news:", error);
     return [];
