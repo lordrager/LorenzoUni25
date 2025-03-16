@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
@@ -20,6 +19,7 @@ import {
   addDislikedNews,
 } from "@/class/User";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { BootstrapStyles } from "@/app/styles/bootstrap";
 
 const { height } = Dimensions.get("window");
 
@@ -42,12 +42,30 @@ export default function UserHomeScreen() {
       try {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
           if (!user) {
-            router.replace("/"); // Redirect to login
+            console.log("No user found, redirecting to login");
+            // Use try/catch when redirecting to prevent potential crashes
+            try {
+              router.replace("/");
+            } catch (navError) {
+              console.error("Navigation error:", navError);
+              // Fallback navigation if replace fails
+              router.push("/");
+            }
             return;
           }
 
           let userData = await getUser(user.uid);
-          if (!userData) return;
+          if (!userData) {
+            console.log("User data not found, redirecting to login");
+            try {
+              router.replace("/");
+            } catch (navError) {
+              console.error("Navigation error:", navError);
+              // Fallback navigation if replace fails
+              router.push("/");
+            }
+            return;
+          }
 
           // Compute previous login info BEFORE updating the streak.
           const prevLastLogin = userData.last_login
@@ -131,17 +149,17 @@ export default function UserHomeScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007BFF" />
-        <Text style={styles.loadingText}>Loading News Feed...</Text>
+      <View style={[BootstrapStyles.container, BootstrapStyles.justifyContentCenter, BootstrapStyles.alignItemsCenter]}>
+        <ActivityIndicator size="large" color={BootstrapStyles.textPrimary.color} />
+        <Text style={[BootstrapStyles.textMuted, BootstrapStyles.mt3]}>Loading News Feed...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>Error: {error}</Text>
+      <View style={[BootstrapStyles.container, BootstrapStyles.justifyContentCenter, BootstrapStyles.alignItemsCenter]}>
+        <Text style={[BootstrapStyles.textDanger, BootstrapStyles.textCenter]}>Error: {error}</Text>
         {loggedUser && (
           <StreakModal
             visible={firstLoginToday}
@@ -157,8 +175,8 @@ export default function UserHomeScreen() {
 
   if (!newsArticles.length) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.noArticlesText}>No articles available</Text>
+      <View style={[BootstrapStyles.container, BootstrapStyles.justifyContentCenter, BootstrapStyles.alignItemsCenter]}>
+        <Text style={[BootstrapStyles.textMuted, BootstrapStyles.textCenter]}>No articles available</Text>
         {loggedUser && (
           <StreakModal
             visible={firstLoginToday}
@@ -173,28 +191,28 @@ export default function UserHomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[BootstrapStyles.container, BootstrapStyles.bgLight, BootstrapStyles.justifyContentCenter]}>
       <TouchableOpacity
-        style={styles.newsCard}
+        style={[BootstrapStyles.card, BootstrapStyles.shadow]}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.9}
       >
-        <Text style={styles.header}>{currentArticle.title}</Text>
-        <Text style={styles.content} numberOfLines={3}>
+        <Text style={[BootstrapStyles.textH3, BootstrapStyles.textCenter, BootstrapStyles.mb3]}>{currentArticle.title}</Text>
+        <Text style={[BootstrapStyles.mb4, { fontSize: 16, lineHeight: 24 }]} numberOfLines={3}>
           {currentArticle.content_short}
         </Text>
-        <View style={styles.buttonsContainer}>
+        <View style={[BootstrapStyles.flexRow, BootstrapStyles.justifyContentBetween, BootstrapStyles.mt3]}>
           <TouchableOpacity
-            style={[styles.button, styles.dislikeButton]}
+            style={[BootstrapStyles.btn, BootstrapStyles.btnDanger, BootstrapStyles.w50, BootstrapStyles.mr2]}
             onPress={handleDislike}
           >
-            <Text style={styles.buttonText}>Dislike</Text>
+            <Text style={BootstrapStyles.textWhite}>Dislike</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.button, styles.likeButton]}
+            style={[BootstrapStyles.btn, BootstrapStyles.btnPrimary, BootstrapStyles.w50, BootstrapStyles.ml2]}
             onPress={handleLike}
           >
-            <Text style={styles.buttonText}>Like</Text>
+            <Text style={BootstrapStyles.textWhite}>Like</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -218,80 +236,5 @@ export default function UserHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 20,
-    backgroundColor: "#f0f2f5",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  newsCard: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  header: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  content: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#444",
-    marginBottom: 25,
-  },
-  buttonsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 15,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-  likeButton: {
-    backgroundColor: "#007bff",
-  },
-  dislikeButton: {
-    backgroundColor: "#dc3545",
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  loadingText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: "#666",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc3545",
-    textAlign: "center",
-  },
-  noArticlesText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-  },
-});
-
-export default UserHomeScreen;
+// Remove this duplicate export default
+// export default UserHomeScreen;
