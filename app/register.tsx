@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from "react-native";
-import { Link, router } from "expo-router";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { BootstrapStyles } from "@/app/styles/bootstrap";
 
@@ -13,24 +12,49 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Disable registration if any field is invalid
   const isRegistrationDisabled =
     !username.trim() ||
     !email.includes("@") ||
     password !== confirmPassword ||
-    password.length === 0;
-
-  const auth = getAuth();
+    password.length === 0 ||
+    isLoading;
 
   const handleRegistration = async () => {
-    // Store the username, email, and password locally for later use.
-    window.localStorage.setItem("usernameForSignIn", username);
-    window.localStorage.setItem("emailForSignIn", email);
-    window.localStorage.setItem("passwordForSignIn", password);
-    console.log("Username:", username);
-    console.log("Email:", email);
-    router.replace("./preffered_news"); // Navigate after successful registration
+    if (isRegistrationDisabled) {
+      Alert.alert("Error", "Please complete all fields correctly.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Validate email format more thoroughly
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error("Please enter a valid email address.");
+      }
+      
+      // Validate password strength
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters long.");
+      }
+      
+      // Store registration information in localStorage
+      window.localStorage.setItem("usernameForSignUp", username);
+      window.localStorage.setItem("emailForSignUp", email);
+      window.localStorage.setItem("passwordForSignUp", password);
+      
+      // Navigate to the email confirmation screen
+      router.replace("/confirm_email");
+    } catch (error) {
+      console.error("Validation error:", error);
+      Alert.alert("Registration Error", error.message || "Failed to process registration. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBackPress = () => {
@@ -154,7 +178,9 @@ export default function RegisterScreen() {
               disabled={isRegistrationDisabled}
               onPress={handleRegistration}
             >
-              <Text style={[BootstrapStyles.textWhite, BootstrapStyles.textCenter, styles.buttonText]}>Register</Text>
+              <Text style={[BootstrapStyles.textWhite, BootstrapStyles.textCenter, styles.buttonText]}>
+                {isLoading ? "Creating Account..." : "Register"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
