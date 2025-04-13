@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/app/firebaseConfig"; // Adjust if your path is different
 import { LinearGradient } from "expo-linear-gradient";
@@ -146,53 +146,42 @@ export default function PreferredNewsScreen() {
       window.localStorage.removeItem("emailForSignUp");
       window.localStorage.removeItem("passwordForSignUp");
       window.localStorage.removeItem("usernameForSignUp");
-
-      // Navigation function to ensure routing works
-      const navigateToHome = () => {
-        console.log("PreferredNews - Executing navigation to home");
-        
+      
+      // Prepare logout and direct navigation function
+      const completeSetupAndRedirect = async () => {
+        console.log("PreferredNews - Executing final sign out and redirect");
         try {
-          console.log("PreferredNews - Attempting router.replace to /");
-          router.replace("/");
-        } catch (navError) {
-          console.error("PreferredNews - Navigation error with replace:", navError);
+          // Sign out the user
+          console.log("PreferredNews - Signing out user");
+          await signOut(auth);
+          console.log("PreferredNews - User signed out successfully");
           
-          // Try alternative navigation methods if replace fails
-          try {
-            console.log("PreferredNews - Attempting router.push to /");
-            router.push("/");
-          } catch (pushError) {
-            console.error("PreferredNews - Navigation error with push:", pushError);
-            
-            // Last resort - use setTimeout
-            console.log("PreferredNews - Attempting navigation with timeout");
-            setTimeout(() => {
-              window.location.href = "/";
-            }, 500);
-          }
+          // Direct navigation to home page
+          console.log("PreferredNews - Redirecting to home page using direct URL");
+          window.location.href = "/";
+        } catch (error) {
+          console.error("PreferredNews - Error during final redirect:", error);
+          // Force navigation even if error occurs
+          window.location.href = "/";
         }
       };
 
       // Show success message and navigate to home
       console.log("PreferredNews - Registration complete, showing success alert");
       Alert.alert(
-        "Setup Complete",
-        "Your preferences have been saved successfully!",
+        "Registration Complete",
+        "Your account has been created successfully! Please log in to continue.",
         [{ 
           text: "Continue", 
-          onPress: () => {
-            console.log("PreferredNews - Alert continue button pressed");
-            navigateToHome();
-          }
+          onPress: completeSetupAndRedirect
         }]
       );
       
-      // Fallback navigation in case the Alert callback doesn't work
-      // Will execute after a short delay to give the Alert time to display
+      // Emergency fallback navigation after 3 seconds if alert doesn't trigger
       setTimeout(() => {
-        console.log("PreferredNews - Executing fallback navigation after timeout");
-        navigateToHome();
-      }, 2000);
+        console.log("PreferredNews - Emergency fallback redirect activated");
+        completeSetupAndRedirect();
+      }, 3000);
       
     } catch (error) {
       console.error("PreferredNews - Error saving preferences:", error);

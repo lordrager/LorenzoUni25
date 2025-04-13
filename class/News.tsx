@@ -1,11 +1,11 @@
 import { 
   doc, setDoc, getDoc, collection, getDocs, updateDoc,
-  query, where, orderBy, limit, arrayUnion
+  query, where, orderBy, limit, arrayUnion, increment
 } from "firebase/firestore";
 import { db } from "../app/firebaseConfig";
 
 class News {
-  constructor(title, date, likes, dislikes, content_long, content_short, tags, country, city) {
+  constructor(title, date, likes, dislikes, content_long, content_short, tags, country, city, total_views = 0) {
     this.title = title;
     this.date = date;
     this.likes = likes;
@@ -15,6 +15,7 @@ class News {
     this.tags = tags;
     this.country = country;
     this.city = city;
+    this.total_views = total_views;
   }
 }
 
@@ -29,40 +30,104 @@ const newsConverter = {
     tags: news.tags,
     country: news.country,
     city: news.city,
+    total_views: news.total_views || 0
   }),
   fromFirestore: (snapshot, options) => {
     const data = snapshot.data(options);
+    // Handle date properly based on its format
+    let date;
+    if (typeof data.date === 'string') {
+      // If date is stored as a string like "2025-03-19"
+      date = data.date;
+    } else if (data.date && data.date.toDate) {
+      // If date is a Firestore timestamp
+      date = data.date.toDate();
+    } else if (data.date instanceof Date) {
+      // If date is already a JavaScript Date
+      date = data.date;
+    } else {
+      // Fallback
+      date = new Date();
+    }
+    
     return new News(
       data.title,
-      new Date(data.date),
+      date,
       data.likes,
       data.dislikes,
       data.content_long,
       data.content_short,
       data.tags,
       data.country,
-      data.city
+      data.city,
+      data.total_views || 0
     );
   },
 };
 
-// New function: Get recent news by tags
+// Fixed function: Get recent news by tags
 export const getRecentNewsByTags = async (tags) => {
-  // Calculate date threshold (2 weeks ago)
-  const twoWeeksAgo = new Date();
-  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+  console.log("Getting recent news for tags:", tags);
+  
   try {
-    const newsCollection = collection(db, "news").withConverter(newsConverter);
-    const q = query(
+    const newsCollection = collection(db, "news");
+    
+    // First, get all news with the specified tags
+    const tagQuery = query(
       newsCollection,
-      where("tags", "array-contains-any", tags),
-      where("date", ">=", twoWeeksAgo),
-      orderBy("date", "desc"),
-      limit(10)
+      where("tags", "array-contains-any", tags)
     );
-    const querySnapshot = await getDocs(q);
-    // Map each document to include its id
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    const querySnapshot = await getDocs(tagQuery);
+    console.log(`Found ${querySnapshot.size} news articles with matching tags`);
+    
+    // Process results client-side
+    const now = new Date();
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const twoWeeksAgoString = twoWeeksAgo.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    
+    // Filter and map results
+    const newsArticles = querySnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data
+        };
+      })
+      .filter(news => {
+        // Handle date comparison based on string format (YYYY-MM-DD)
+        if (typeof news.date === 'string') {
+          // If it's a string, compare lexicographically (works for YYYY-MM-DD format)
+          return news.date >= twoWeeksAgoString;
+        } else if (news.date && news.date.toDate) {
+          // If it's a Firestore timestamp
+          return news.date.toDate() >= twoWeeksAgo;
+        } else if (news.date instanceof Date) {
+          // If it's a JavaScript Date
+          return news.date >= twoWeeksAgo;
+        }
+        // Default fallback
+        return true;
+      })
+      .sort((a, b) => {
+        // Sort by date (newest first)
+        if (typeof a.date === 'string' && typeof b.date === 'string') {
+          // For string dates, reverse the comparison for descending order
+          return b.date.localeCompare(a.date);
+        } else if (a.date instanceof Date && b.date instanceof Date) {
+          return b.date.getTime() - a.date.getTime();
+        } else if (a.date && a.date.toDate && b.date && b.date.toDate) {
+          return b.date.toDate().getTime() - a.date.toDate().getTime();
+        }
+        // Fallback for mixed types
+        return 0;
+      })
+      .slice(0, 10); // Limit to 10 items
+    
+    console.log(`Returning ${newsArticles.length} filtered news articles`);
+    return newsArticles;
   } catch (error) {
     console.error("Error fetching recent news:", error);
     return [];
@@ -79,36 +144,39 @@ export const addMockNewsData = async () => {
   const mockNews = [
     new News(
       "Breaking: Market Crash Expected",
-      new Date(),
+      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
       120,
       15,
       "Stock markets are predicted to fall drastically due to global economic instability...",
       "Markets may crash soon!",
       ["finance", "stocks", "economy"],
       "USA",
-      "New York"
+      "New York",
+      0 // Initial total_views
     ),
     new News(
       "Tech Giants Release New AI",
-      new Date(),
+      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
       200,
       10,
       "Several major tech companies have unveiled their latest AI models, promising groundbreaking advancements...",
       "New AI models announced!",
       ["technology", "AI", "innovation"],
       "UK",
-      "London"
+      "London",
+      0 // Initial total_views
     ),
     new News(
       "Sports Finals: Historic Victory",
-      new Date(),
+      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
       300,
       5,
       "In an incredible turn of events, the underdogs secured a last-minute victory in the finals...",
       "Underdogs win big!",
       ["sports", "football", "championship"],
       "Spain",
-      "Madrid"
+      "Madrid",
+      0 // Initial total_views
     )
   ];
 
@@ -144,16 +212,68 @@ export const updateNewsByTitle = async (title, updatedFields) => {
   }
 };
 
+// Update news views and add to watched list
 export const addWatchedNews = async (userId, newsId) => {
-  if (!userId || !newsId) return;
+  if (!userId || !newsId) return false;
   try {
     const userRef = doc(db, "users", userId);
+    const newsRef = doc(db, "news", newsId);
+    
+    // Update user's watched_news array
     await updateDoc(userRef, {
       watched_news: arrayUnion(newsId),
     });
-    console.log(`News ${newsId} added to watched_news`);
+    
+    // Increment total_views in the news document
+    await updateDoc(newsRef, {
+      total_views: increment(1)
+    });
+    
+    console.log(`News ${newsId} added to watched_news and view count incremented`);
+    return true;
   } catch (error) {
     console.error("Error adding watched news:", error);
+    return false;
+  }
+};
+
+// New function to increment likes and views
+export const incrementNewsLikes = async (newsId) => {
+  if (!newsId) return false;
+  try {
+    const newsRef = doc(db, "news", newsId);
+    
+    // Increment likes and total_views
+    await updateDoc(newsRef, {
+      likes: increment(1),
+      total_views: increment(1)
+    });
+    
+    console.log(`News ${newsId} likes and views incremented`);
+    return true;
+  } catch (error) {
+    console.error("Error incrementing news likes:", error);
+    return false;
+  }
+};
+
+// New function to increment dislikes and views
+export const incrementNewsDislikes = async (newsId) => {
+  if (!newsId) return false;
+  try {
+    const newsRef = doc(db, "news", newsId);
+    
+    // Increment dislikes and total_views
+    await updateDoc(newsRef, {
+      dislikes: increment(1),
+      total_views: increment(1)
+    });
+    
+    console.log(`News ${newsId} dislikes and views incremented`);
+    return true;
+  } catch (error) {
+    console.error("Error incrementing news dislikes:", error);
+    return false;
   }
 };
 
@@ -175,7 +295,7 @@ export const getLikedNews = async (userId: string) => {
     const newsPromises = likedNewsIds.map(async (newsId) => {
       const newsRef = doc(db, "news", newsId).withConverter(newsConverter);
       const newsSnap = await getDoc(newsRef);
-      return newsSnap.exists() ? newsSnap.data() : null;
+      return newsSnap.exists() ? { id: newsId, ...newsSnap.data() } : null;
     });
     
     const newsResults = await Promise.all(newsPromises);

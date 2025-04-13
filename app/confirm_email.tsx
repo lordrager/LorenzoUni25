@@ -19,20 +19,27 @@ export default function ConfirmEmailScreen() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [showVerificationStatus, setShowVerificationStatus] = useState(false);
 
   // Retrieve stored credentials on mount
   useEffect(() => {
+    console.log("ConfirmEmail - Component mounted, retrieving credentials");
     const storedEmail = window.localStorage.getItem("emailForSignUp");
     const storedPassword = window.localStorage.getItem("passwordForSignUp");
     const storedUsername = window.localStorage.getItem("usernameForSignUp");
+    
+    console.log("ConfirmEmail - Stored email:", storedEmail ? "Found" : "Not found");
+    console.log("ConfirmEmail - Stored username:", storedUsername ? "Found" : "Not found");
     
     if (storedEmail && storedPassword && storedUsername) {
       setEmail(storedEmail);
       setPassword(storedPassword);
       setUsername(storedUsername);
+      console.log("ConfirmEmail - Creating user account with email:", storedEmail);
       createUserAccount(storedEmail, storedPassword);
     } else {
       // If no stored credentials, redirect back to register
+      console.log("ConfirmEmail - Missing credentials, redirecting to register");
       Alert.alert("Error", "Registration information missing. Please start over.");
       router.replace("/register");
     }
@@ -41,24 +48,41 @@ export default function ConfirmEmailScreen() {
   // Check authentication state and email verification status
   useEffect(() => {
     const auth = getAuth();
+    console.log("ConfirmEmail - Setting up auth state listener");
+    
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
+        console.log("ConfirmEmail - Auth state changed. User:", user.email);
+        console.log("ConfirmEmail - Email verified status:", user.emailVerified);
+        
         // Update verification status whenever auth state changes
+        const wasVerified = isEmailVerified;
         setIsEmailVerified(user.emailVerified);
         
         // If user just verified their email (by clicking the link)
-        if (user.emailVerified && !isEmailVerified) {
+        if (user.emailVerified && !wasVerified) {
+          console.log("ConfirmEmail - Email just verified, showing alert");
+          setShowVerificationStatus(true);
           Alert.alert(
             "Email Verified", 
-            "Your email has been successfully verified! You can now continue to preferences."
+            "Your email has been successfully verified! You can now continue to preferences.",
+            [{ 
+              text: "Continue", 
+              onPress: () => {
+                console.log("ConfirmEmail - Auto-navigating to preferences after verification");
+                goToPreferences();
+              } 
+            }]
           );
         }
+      } else {
+        console.log("ConfirmEmail - No user found in auth state change");
       }
     });
 
     // Cleanup subscription
     return () => unsubscribe();
-  }, []);
+  }, [isEmailVerified]);
 
   // Handle countdown for resend email button
   useEffect(() => {
@@ -71,18 +95,26 @@ export default function ConfirmEmailScreen() {
 
   // Create user account in Firebase
   const createUserAccount = async (email, password) => {
-    if (!email || !password || userCreated) return;
+    if (!email || !password || userCreated) {
+      console.log("ConfirmEmail - Create account skipped:", !email ? "No email" : !password ? "No password" : "Already created");
+      return;
+    }
     
+    console.log("ConfirmEmail - Starting user account creation");
     setIsVerifying(true);
     
     try {
       const auth = getAuth();
+      console.log("ConfirmEmail - Creating user with Firebase");
       // Create new user account
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      console.log("ConfirmEmail - User created successfully:", user.uid);
       
       // Send verification email
+      console.log("ConfirmEmail - Sending verification email");
       await sendEmailVerification(user);
+      console.log("ConfirmEmail - Verification email sent successfully");
       
       // Start countdown for resend button
       setCountdown(60);
@@ -93,22 +125,27 @@ export default function ConfirmEmailScreen() {
         "We've sent a verification link to your email. Please check your inbox and click the link to verify your account."
       );
     } catch (error) {
-      console.error("Error creating user account:", error);
+      console.error("ConfirmEmail - Error creating user account:", error);
+      console.log("ConfirmEmail - Error code:", error.code);
       
       let errorMessage = "Failed to create account. Please try again.";
       if (error.code === "auth/email-already-in-use") {
+        console.log("ConfirmEmail - Email already in use");
         errorMessage = "This email is already in use. Please try another email or login.";
         router.replace("/register");
       } else if (error.code === "auth/invalid-email") {
+        console.log("ConfirmEmail - Invalid email format");
         errorMessage = "Invalid email address. Please check your email format.";
         router.replace("/register");
       } else if (error.code === "auth/weak-password") {
+        console.log("ConfirmEmail - Weak password");
         errorMessage = "Password is too weak. Please choose a stronger password.";
         router.replace("/register");
       }
       
       Alert.alert("Account Creation Error", errorMessage);
     } finally {
+      console.log("ConfirmEmail - Account creation process complete");
       setIsVerifying(false);
     }
   };
@@ -116,19 +153,24 @@ export default function ConfirmEmailScreen() {
   // Check email verification status before proceeding
   const checkEmailVerification = async () => {
     const auth = getAuth();
+    console.log("ConfirmEmail - Checking email verification status");
     setIsVerifying(true);
     
     try {
       // Force refresh user to get latest emailVerified status
       if (auth.currentUser) {
+        console.log("ConfirmEmail - Found current user, reloading to get fresh data");
         await auth.currentUser.reload();
         const user = auth.currentUser;
+        console.log("ConfirmEmail - User reloaded, verification status:", user.emailVerified);
         
         if (user.emailVerified) {
           // Email is verified, proceed to preferences
+          console.log("ConfirmEmail - Email is verified, proceeding to preferences");
           goToPreferences();
         } else {
           // Email not verified, show warning
+          console.log("ConfirmEmail - Email not verified, showing resend option");
           Alert.alert(
             "Email Not Verified", 
             "Please check your email and click the verification link before continuing. Would you like us to send another verification email?",
@@ -139,10 +181,11 @@ export default function ConfirmEmailScreen() {
           );
         }
       } else {
+        console.log("ConfirmEmail - No current user found");
         throw new Error("User not found");
       }
     } catch (error) {
-      console.error("Error checking verification:", error);
+      console.error("ConfirmEmail - Error checking verification:", error);
       Alert.alert("Error", "Failed to check email verification status. Please try again.");
     } finally {
       setIsVerifying(false);
@@ -152,17 +195,21 @@ export default function ConfirmEmailScreen() {
   // Send verification email
   const sendVerificationEmail = async () => {
     const auth = getAuth();
+    console.log("ConfirmEmail - Attempting to send verification email");
     
     try {
       setIsVerifying(true);
       
       const user = auth.currentUser;
       if (!user) {
+        console.log("ConfirmEmail - No current user found for verification email");
         throw new Error("User not found. Please refresh the page.");
       }
       
+      console.log("ConfirmEmail - User found, sending verification email to:", user.email);
       // Send verification email
       await sendEmailVerification(user);
+      console.log("ConfirmEmail - Verification email sent successfully");
       
       // Start countdown for resend button
       setCountdown(60);
@@ -172,7 +219,7 @@ export default function ConfirmEmailScreen() {
         "We've sent a verification link to your email. Please check your inbox and click the link to verify your account."
       );
     } catch (error) {
-      console.error("Error sending verification email:", error);
+      console.error("ConfirmEmail - Error sending verification email:", error);
       Alert.alert("Error", "Failed to send verification email. Please try again.");
     } finally {
       setIsVerifying(false);
@@ -181,13 +228,16 @@ export default function ConfirmEmailScreen() {
 
   // Go to preferences page
   const goToPreferences = () => {
+    console.log("ConfirmEmail - Navigating to preferences page");
     setIsVerifying(true);
     try {
       // Directly navigate to preffered_news
+      console.log("ConfirmEmail - Attempting to replace route with preffered_news");
       router.replace("/preffered_news");
     } catch (error) {
-      console.error("Navigation error:", error);
+      console.error("ConfirmEmail - Navigation error:", error);
       // Fallback navigation if the first attempt fails
+      console.log("ConfirmEmail - Using fallback navigation with timeout");
       setTimeout(() => {
         router.push("/preffered_news");
       }, 300);
@@ -263,7 +313,7 @@ export default function ConfirmEmailScreen() {
             </Text>
 
             {/* Verification Status */}
-            {isEmailVerified && (
+            {showVerificationStatus && isEmailVerified && (
               <View style={styles.verificationStatusContainer}>
                 <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
                 <Text style={styles.verificationStatusText}>Email Verified Successfully!</Text>
