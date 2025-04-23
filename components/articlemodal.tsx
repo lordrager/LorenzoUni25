@@ -9,12 +9,8 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { updateNewsByTitle } from "../class/News";
-import { addWatchedNews, addLikedNews, addDislikedNews } from "@/class/User";
-import { 
-  createArticleLikedNotification, 
-  createArticleDislikedNotification 
-} from "@/class/Notification";
+import { updateNewsByTitle, incrementNewsLikes, incrementNewsDislikes } from "../class/News";
+import { addWatchedNews, addLikedNews, addDislikedNews, getUser } from "@/class/User";
 
 interface ArticleModalProps {
   visible: boolean;
@@ -45,26 +41,70 @@ export default function ArticleModal({
   const [dislikesPressed, setDislikesPressed] = useState(false);
   const [actionPerformed, setActionPerformed] = useState(false);
   const [isMarkedAsWatched, setIsMarkedAsWatched] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userLikedNews, setUserLikedNews] = useState<string[]>([]);
+  const [userDislikedNews, setUserDislikedNews] = useState<string[]>([]);
+  const [userWatchedNews, setUserWatchedNews] = useState<string[]>([]);
 
-  // Reset states when modal opens/closes
+  // Check user's interaction history when the modal opens
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (visible && article && userId) {
+        setIsLoading(true);
+        
+        try {
+          const userData = await getUser(userId);
+          
+          if (userData) {
+            // Store the arrays in state for easier access
+            setUserLikedNews(userData.liked_news || []);
+            setUserDislikedNews(userData.disliked_news || []);
+            setUserWatchedNews(userData.watched_news || []);
+            
+            // Check if this article is in any of the arrays
+            const hasLiked = userData.liked_news?.includes(article.id) || false;
+            const hasDisliked = userData.disliked_news?.includes(article.id) || false;
+            const hasWatched = userData.watched_news?.includes(article.id) || false;
+            
+            console.log(`Article ${article.id} interaction status:`, {
+              liked: hasLiked,
+              disliked: hasDisliked,
+              watched: hasWatched
+            });
+            
+            // Set the UI state based on previous interactions
+            setLikesPressed(hasLiked);
+            setDislikesPressed(hasDisliked);
+            setIsMarkedAsWatched(hasWatched);
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    fetchUserData();
+  }, [visible, article, userId]);
+
+  // Reset numerical states when modal opens/closes
   useEffect(() => {
     if (visible && article) {
       setLikes(article.likes);
       setDislikes(article.dislikes);
-      setLikesPressed(false);
-      setDislikesPressed(false);
       setActionPerformed(false);
-      setIsMarkedAsWatched(false);
       
-      // Mark article as watched when opened
-      if (userId && article.id) {
+      // Mark article as watched when opened (only if not already watched)
+      if (userId && article.id && !userWatchedNews.includes(article.id)) {
         markAsWatched(userId, article.id);
       }
     }
-  }, [visible, article, userId]);
+  }, [visible, article, userId, userWatchedNews]);
 
   const markAsWatched = async (userId: string, articleId: string) => {
-    if (isMarkedAsWatched) return;
+    // Skip if already watched
+    if (userWatchedNews.includes(articleId)) return;
     
     try {
       console.log("Marking article as watched:", articleId);
@@ -73,6 +113,9 @@ export default function ArticleModal({
       if (success) {
         console.log("Successfully marked article as watched");
         setIsMarkedAsWatched(true);
+        
+        // Update local state
+        setUserWatchedNews(prev => [...prev, articleId]);
         
         // Notify parent component
         if (onArticleAction) {
@@ -85,16 +128,13 @@ export default function ArticleModal({
   };
 
   const handleClose = () => {
-    setLikesPressed(false);
-    setDislikesPressed(false);
-    
     console.log("Closing modal, action performed:", actionPerformed);
     
     // If an action was performed, notify the parent component
     if (actionPerformed && article && onArticleAction) {
-      if (likePressed) {
+      if (likePressed && !userLikedNews.includes(article.id)) {
         onArticleAction(article.id, 'like');
-      } else if (dislikesPressed) {
+      } else if (dislikesPressed && !userDislikedNews.includes(article.id)) {
         onArticleAction(article.id, 'dislike');
       }
     }
@@ -103,84 +143,116 @@ export default function ArticleModal({
   };
 
   const handleLike = async () => {
-    if (!article || !userId) return;
-    let updatedFields: any = {};
-
-    if (!likePressed && !dislikesPressed) {
-      updatedFields = { likes: likes + 1 };
-    } else if (likePressed && !dislikesPressed) {
-      updatedFields = { likes: likes - 1 };
-    } else if (!likePressed && dislikesPressed) {
-      updatedFields = { likes: likes + 1, dislikes: dislikes - 1 };
-    }
-
-    const success = await updateNewsByTitle(article.title, updatedFields);
-    if (success) {
-      setLikes(updatedFields.likes || likes);
-      setDislikes(updatedFields.dislikes || dislikes);
-      setLikesPressed(!likePressed);
-      setDislikesPressed(false);
-      setActionPerformed(true);
-      
-      // Mark article as watched
-      if (!isMarkedAsWatched) {
-        await markAsWatched(userId, article.id);
+    if (!article || !userId || isLoading) return;
+    
+    const articleId = article.id;
+    
+    // First, check what state we're in based on the user's arrays
+    const isAlreadyLiked = userLikedNews.includes(articleId);
+    const isAlreadyDisliked = userDislikedNews.includes(articleId);
+    
+    try {
+      if (isAlreadyLiked) {
+        console.log("Already liked this article, ignoring");
+        return;
       }
+      let success = false;
       
-      // Add to user's liked news
-      if (!likePressed) {
-        await addLikedNews(userId, article.id);
+      // Add to user's liked_news array - this will also handle the news document update
+      success = await addLikedNews(userId, articleId);
+      
+      if (success) {
+        console.log("Successfully liked article");
         
-        // Create a notification about liking the article using the notification functions
-        await createArticleLikedNotification(
-          article.id,
-          article.title,
-          userId
-        );
+        // Update UI state
+        setLikesPressed(true);
+        setDislikesPressed(false);
+        setActionPerformed(true);
+        
+        // Update local counts based on the transition
+        if (isAlreadyDisliked) {
+          // Switching from dislike to like
+          setLikes(likes + 1);
+          setDislikes(dislikes - 1);
+        } else {
+          // New like
+          setLikes(likes + 1);
+        }
+        
+        // Update local state arrays
+        setUserLikedNews(prev => [...prev, articleId]);
+        
+        // If it was previously disliked, remove from disliked array
+        if (isAlreadyDisliked) {
+          setUserDislikedNews(prev => prev.filter(id => id !== articleId));
+        }
+        
+        // Mark article as watched if needed
+        if (!userWatchedNews.includes(articleId)) {
+          await markAsWatched(userId, articleId);
+        }
       }
+    } catch (error) {
+      console.error("Error liking article:", error);
     }
   };
 
   const handleDislike = async () => {
-    if (!article || !userId) return;
-    let updatedFields: any = {};
-
-    if (!likePressed && !dislikesPressed) {
-      updatedFields = { dislikes: dislikes + 1 };
-    } else if (!likePressed && dislikesPressed) {
-      updatedFields = { dislikes: dislikes - 1 };
-    } else if (likePressed && !dislikesPressed) {
-      updatedFields = { dislikes: dislikes + 1, likes: likes - 1 };
-    }
-
-    const success = await updateNewsByTitle(article.title, updatedFields);
-    if (success) {
-      setLikes(updatedFields.likes || likes);
-      setDislikes(updatedFields.dislikes || dislikes);
-      setDislikesPressed(!dislikesPressed);
-      setLikesPressed(false);
-      setActionPerformed(true);
-      
-      // Mark article as watched
-      if (!isMarkedAsWatched) {
-        await markAsWatched(userId, article.id);
+    if (!article || !userId || isLoading) return;
+    
+    const articleId = article.id;
+    
+    // First, check what state we're in based on the user's arrays
+    const isAlreadyLiked = userLikedNews.includes(articleId);
+    const isAlreadyDisliked = userDislikedNews.includes(articleId);
+    
+    try {
+      if (isAlreadyDisliked) {
+        console.log("Already disliked this article, ignoring");
+        return;
       }
+      let success = false;
       
-      // Add to user's disliked news
-      if (!dislikesPressed) {
-        await addDislikedNews(userId, article.id);
+      // Add to user's disliked_news array - this will also handle the news document update
+      success = await addDislikedNews(userId, articleId);
+      
+      if (success) {
+        console.log("Successfully disliked article");
         
-        // Create a notification about disliking the article using the notification functions
-        await createArticleDislikedNotification(
-          article.id,
-          article.title,
-          userId
-        );
+        // Update UI state
+        setLikesPressed(false);
+        setDislikesPressed(true);
+        setActionPerformed(true);
+        
+        // Update local counts based on the transition
+        if (isAlreadyLiked) {
+          // Switching from like to dislike
+          setLikes(likes - 1);
+          setDislikes(dislikes + 1);
+        } else {
+          // New dislike
+          setDislikes(dislikes + 1);
+        }
+        
+        // Update local state arrays
+        setUserDislikedNews(prev => [...prev, articleId]);
+        
+        // If it was previously liked, remove from liked array
+        if (isAlreadyLiked) {
+          setUserLikedNews(prev => prev.filter(id => id !== articleId));
+        }
+        
+        // Mark article as watched if needed
+        if (!userWatchedNews.includes(articleId)) {
+          await markAsWatched(userId, articleId);
+        }
       }
+    } catch (error) {
+      console.error("Error disliking article:", error);
     }
   };
 
-  // Calculate estimated read time based on content length (rough estimate)
+  // Calculate estimated read time based on content length
   const getReadTime = (text: string): number => {
     // Average reading speed: ~200 words per minute
     const words = text.split(/\s+/).length;
@@ -255,7 +327,7 @@ export default function ArticleModal({
               <TouchableOpacity 
                 style={[styles.button, likePressed && styles.likeButtonActive]} 
                 onPress={handleLike}
-                disabled={!userId}
+                disabled={!userId || isLoading || userLikedNews.includes(article?.id || '')}
               >
                 <Feather 
                   name="thumbs-up" 
@@ -273,7 +345,7 @@ export default function ArticleModal({
               <TouchableOpacity 
                 style={[styles.button, dislikesPressed && styles.dislikeButtonActive]} 
                 onPress={handleDislike}
-                disabled={!userId}
+                disabled={!userId || isLoading || userDislikedNews.includes(article?.id || '')}
               >
                 <Feather 
                   name="thumbs-down" 

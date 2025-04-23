@@ -1,8 +1,17 @@
 import { 
   doc, setDoc, getDoc, getDocs, updateDoc, collection,
-  arrayUnion, increment, serverTimestamp
+  arrayUnion, arrayRemove, increment, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../app/firebaseConfig";
+
+// Define the UserNotification interface
+export interface UserNotification {
+  id: string;           // Unique identifier for the notification
+  date: string;         // ISO string timestamp
+  description: string;  // Notification content
+  isSeen: boolean;      // Whether the user has seen this notification
+  newsId?: string;      // Optional ID reference to a news article
+}
 
 class User {
   constructor(
@@ -10,7 +19,7 @@ class User {
     public profileName: string = "",
     public experience: number = 0,
     public level: number = 1,
-    public notifications: any[] = [],
+    public notifications: UserNotification[] = [], // Typed as UserNotification[]
     public tags: string[] = [],
     public liked_news: string[] = [],
     public disliked_news: string[] = [],
@@ -85,7 +94,6 @@ export const getUser = async (uid: string): Promise<User | null> => {
   }
 };
 
-
 export const getAllUsers = async () => {
   try {
     console.log("Fetching all users...");
@@ -111,15 +119,6 @@ export const updateUser = async (uid: string, updatedFields: Partial<User>) => {
   }
 };
 
-/**
- * New function: updateUsername
- *
- * Updates the user's username (stored as profileName) in Firestore.
- *
- * @param uid - The user's unique identifier.
- * @param newUsername - The new username to set.
- * @returns A boolean indicating whether the operation was successful.
- */
 export const updateUsername = async (uid: string, newUsername: string): Promise<boolean> => {
   const trimmedUsername = newUsername ? newUsername.trim() : "";
   if (!trimmedUsername) {
@@ -188,10 +187,6 @@ export const updateStreak = async (uid: string) => {
   }
 };
 
-/**
- * Existing function to update experience by increment.
- * This function has been left intact for reference.
- */
 export const updateExperience = async (uid: string, points: number) => {
   try {
     const userRef = doc(db, "users", uid);
@@ -205,17 +200,6 @@ export const updateExperience = async (uid: string, points: number) => {
   }
 };
 
-/**
- * New function: addExperience
- *
- * This function adds a specified amount of experience points to the user.
- * If the total experience reaches or exceeds 100, it resets the experience (using the remainder)
- * and increases the user's level accordingly.
- *
- * @param uid - The user's unique identifier.
- * @param points - The amount of experience points to add.
- * @returns A boolean indicating whether the operation was successful.
- */
 export const addExperience = async (uid: string, points: number): Promise<boolean> => {
   try {
     const user = await getUser(uid);
@@ -244,19 +228,6 @@ export const addExperience = async (uid: string, points: number): Promise<boolea
   }
 };
 
-/**
- * New function: handleLogin
- *
- * This function should be called when a user logs in.
- * It checks if the user's last login date is different from today. If it is a new day:
- *  - It increments the user's streak (if the last login was yesterday, streak increases; otherwise, it resets to 1).
- *  - It adds 10 experience points using the addExperience function.
- *  - It updates the user's last_login to the current timestamp.
- * If the user has already logged in today, no updates are made.
- *
- * @param uid - The user's unique identifier.
- * @returns A boolean indicating whether the login handling was successful.
- */
 export const handleLogin = async (uid: string): Promise<boolean> => {
   try {
     const user = await getUser(uid);
@@ -305,13 +276,21 @@ export const handleLogin = async (uid: string): Promise<boolean> => {
   }
 };
 
-// Notification Management
-export const addNotification = async (uid: string, notification: any) => {
+// Notification Management Functions
+
+/**
+ * Add a notification to a user's notifications array
+ * @param uid The user's ID
+ * @param notification The notification object to add
+ * @returns Boolean indicating success
+ */
+export const addNotification = async (uid: string, notification: UserNotification): Promise<boolean> => {
   try {
     const userRef = doc(db, "users", uid);
     await updateDoc(userRef, {
       notifications: arrayUnion(notification)
     });
+    console.log(`Notification added for user ${uid}:`, notification.id);
     return true;
   } catch (error) {
     console.error("Error adding notification:", error);
@@ -319,13 +298,197 @@ export const addNotification = async (uid: string, notification: any) => {
   }
 };
 
-// Achievement Functions
+/**
+ * Update a specific notification in a user's notifications array
+ * @param uid The user's ID
+ * @param notificationId The ID of the notification to update
+ * @param updatedNotification The updated notification object
+ * @returns Boolean indicating success
+ */
+export const updateUserNotification = async (
+  uid: string, 
+  notificationId: string, 
+  updatedNotification: UserNotification
+): Promise<boolean> => {
+  try {
+    // First, get the current user data
+    const user = await getUser(uid);
+    if (!user) {
+      console.error("User not found");
+      return false;
+    }
+    
+    // Find the existing notification
+    const existingNotificationIndex = user.notifications.findIndex(
+      (notification) => notification.id === notificationId
+    );
+    
+    if (existingNotificationIndex === -1) {
+      console.error(`Notification ${notificationId} not found for user ${uid}`);
+      return false;
+    }
+    
+    // Create a new notifications array with the updated notification
+    const updatedNotifications = [...user.notifications];
+    updatedNotifications[existingNotificationIndex] = updatedNotification;
+    
+    // Update the user document with the new notifications array
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { 
+      notifications: updatedNotifications 
+    });
+    
+    console.log(`Notification ${notificationId} updated for user ${uid}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating notification:", error);
+    return false;
+  }
+};
 
 /**
- * Retrieves the achievements for a given user.
- * @param uid - The user's unique identifier.
- * @returns An array of achievement strings or null if the user doesn't exist.
+ * Mark a notification as seen
+ * @param uid The user's ID
+ * @param notificationId The ID of the notification to mark as seen
+ * @returns Boolean indicating success
  */
+export const markNotificationAsSeen = async (
+  uid: string,
+  notificationId: string
+): Promise<boolean> => {
+  try {
+    // Get the user data
+    const user = await getUser(uid);
+    if (!user) {
+      console.error("User not found");
+      return false;
+    }
+    
+    // Find the notification
+    const notification = user.notifications.find(n => n.id === notificationId);
+    if (!notification) {
+      console.error(`Notification ${notificationId} not found`);
+      return false;
+    }
+    
+    // Update the notification
+    const updatedNotification = {
+      ...notification,
+      isSeen: true
+    };
+    
+    return await updateUserNotification(uid, notificationId, updatedNotification);
+  } catch (error) {
+    console.error("Error marking notification as seen:", error);
+    return false;
+  }
+};
+
+/**
+ * Create a new notification object
+ * @param description The notification message
+ * @param newsId Optional ID of associated news article
+ * @returns A UserNotification object
+ */
+export const createNotification = (
+  description: string,
+  newsId?: string
+): UserNotification => {
+  const now = new Date();
+  const id = `notification_${now.getTime()}_${Math.random().toString(36).substring(2, 11)}`;
+  
+  return {
+    id,
+    date: now.toISOString(),
+    description,
+    isSeen: false,
+    newsId
+  };
+};
+
+/**
+ * Get all notifications for a user
+ * @param uid The user's ID
+ * @returns Array of notifications or empty array if none found
+ */
+export const getUserNotifications = async (uid: string): Promise<UserNotification[]> => {
+  try {
+    const user = await getUser(uid);
+    if (!user) {
+      console.error("User not found");
+      return [];
+    }
+    
+    return user.notifications || [];
+  } catch (error) {
+    console.error("Error getting user notifications:", error);
+    return [];
+  }
+};
+
+/**
+ * Delete a specific notification
+ * @param uid The user's ID
+ * @param notificationId The ID of the notification to delete
+ * @returns Boolean indicating success
+ */
+export const deleteNotification = async (
+  uid: string,
+  notificationId: string
+): Promise<boolean> => {
+  try {
+    // Get the user data
+    const user = await getUser(uid);
+    if (!user) {
+      console.error("User not found");
+      return false;
+    }
+    
+    // Find the notification
+    const notification = user.notifications.find(n => n.id === notificationId);
+    if (!notification) {
+      console.error(`Notification ${notificationId} not found`);
+      return false;
+    }
+    
+    // Create a new notifications array without the deleted notification
+    const updatedNotifications = user.notifications.filter(
+      n => n.id !== notificationId
+    );
+    
+    // Update the user document
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { 
+      notifications: updatedNotifications 
+    });
+    
+    console.log(`Notification ${notificationId} deleted for user ${uid}`);
+    return true;
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    return false;
+  }
+};
+
+/**
+ * Create a notification for a new article
+ * @param uid The user's ID
+ * @param articleId The article ID
+ * @param articleTitle The article title
+ * @returns Boolean indicating success
+ */
+export const createArticleNotification = async (
+  uid: string,
+  articleId: string,
+  articleTitle: string
+): Promise<boolean> => {
+  const description = `New article: ${articleTitle}`;
+  const notification = createNotification(description, articleId);
+  
+  return await addNotification(uid, notification);
+};
+
+// Achievement Functions
 export const getUserAchievements = async (uid: string): Promise<string[] | null> => {
   try {
     const user = await getUser(uid);
@@ -336,12 +499,6 @@ export const getUserAchievements = async (uid: string): Promise<string[] | null>
   }
 };
 
-/**
- * Adds a new achievement to the user's achievements array.
- * @param uid - The user's unique identifier.
- * @param achievement - The achievement string to add.
- * @returns A boolean indicating whether the operation was successful.
- */
 export const addUserAchievement = async (uid: string, achievement: string): Promise<boolean> => {
   try {
     const userRef = doc(db, "users", uid);
@@ -379,7 +536,6 @@ export const addLikedNews = async (uid: string, newsId: string): Promise<boolean
   }
 };
 
-// Function to add a disliked news article and increment its dislike count
 export const addDislikedNews = async (uid: string, newsId: string): Promise<boolean> => {
   try {
     const userRef = doc(db, "users", uid);
@@ -402,53 +558,5 @@ export const addDislikedNews = async (uid: string, newsId: string): Promise<bool
     return false;
   }
 };
-// Example function to add mock news data (assuming News and newsConverter are defined)
-export const addMockNewsData = async () => {
-  const mockNews = [
-    new News(
-      "Breaking: Market Crash Expected",
-      new Date(),
-      120,
-      15,
-      "Stock markets are predicted to fall drastically due to global economic instability...",
-      "Markets may crash soon!",
-      ["finance", "stocks", "economy"],
-      "USA",
-      "New York"
-    ),
-    new News(
-      "Tech Giants Release New AI",
-      new Date(),
-      200,
-      10,
-      "Several major tech companies have unveiled their latest AI models, promising groundbreaking advancements...",
-      "New AI models announced!",
-      ["technology", "AI", "innovation"],
-      "UK",
-      "London"
-    ),
-    new News(
-      "Sports Finals: Historic Victory",
-      new Date(),
-      300,
-      5,
-      "In an incredible turn of events, the underdogs secured a last-minute victory in the finals...",
-      "Underdogs win big!",
-      ["sports", "football", "championship"],
-      "Spain",
-      "Madrid"
-    )
-  ];
 
-  try {
-    for (const article of mockNews) {
-      const newsRef = doc(collection(db, "news").withConverter(newsConverter));
-      console.log("Adding mock news data...");
-      await setDoc(newsRef, newsConverter.toFirestore(article));
-      console.log(`Added news with ID: ${newsRef.id}`);
-    }
-    console.log("Mock news data added successfully.");
-  } catch (error) {
-    console.error("Error adding mock news data:", error);
-  }
-};
+export default User;

@@ -10,7 +10,7 @@ import {
   Alert
 } from "react-native";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getUser } from "@/class/User";
+import { getUser, UserNotification, markNotificationAsSeen, addWatchedNews } from "@/class/User";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -18,16 +18,12 @@ import ArticleModal from "@/components/articlemodal";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { 
-  Notification,
-  getUserNotifications, 
   setCurrentUserId, 
-  markNotificationAsRead,
-  clearAllNotifications,
-  addMockNotifications
-} from "@/class/Notification";
+  getUserNotifications as getNotifications
+} from "@/class/NotificationService";
 
 export default function UserNotificationScreen() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -43,16 +39,15 @@ export default function UserNotificationScreen() {
       if (user) {
         console.log("User logged in:", user.uid);
         try {
-          // Set user ID in notification system
+          // Set user ID in notification service
           setCurrentUserId(user.uid);
           
           const userData = await getUser(user.uid);
           if (userData) {
             setCurrentUser({...userData, id: user.uid});
             
-            // Get notifications using the function approach
-            const userNotifications = await getUserNotifications();
-            setNotifications(userNotifications);
+            // Get notifications using the notification service
+            await loadNotifications();
           }
         } catch (err) {
           console.error("Error loading notifications:", err);
@@ -69,32 +64,54 @@ export default function UserNotificationScreen() {
     return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      
+      // Get notifications from service
+      const userNotifications = await getNotifications();
+      
+      // Sort notifications by date (newest first)
+      const sortedNotifications = [...userNotifications].sort((a, b) => {
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+      
+      setNotifications(sortedNotifications);
+      console.log(`Loaded ${sortedNotifications.length} notifications`);
+      
+    } catch (error) {
+      console.error("Error loading notifications:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Function to handle notification click
-  const handleNotificationPress = async (notification: Notification) => {
+  const handleNotificationPress = async (notification: UserNotification) => {
     console.log("Notification clicked:", notification);
     
-    // If it's not already read, mark it as read
-    if (!notification.read && notification.id) {
-      await markNotificationAsRead(notification.id);
+    // If it's not already seen, mark it as seen
+    if (!notification.isSeen && notification.id) {
+      await markNotificationAsSeen(currentUser.id, notification.id);
       
       // Update the notifications list
       setNotifications(prevNotifications => 
         prevNotifications.map(n => 
-          n.id === notification.id ? { ...n, read: true } : n
+          n.id === notification.id ? { ...n, isSeen: true } : n
         )
       );
     }
     
-    // If notification doesn't have articleId, ignore
-    if (!notification.data?.articleId) {
-      console.log("No article ID in notification");
+    // If notification doesn't have newsId, ignore
+    if (!notification.newsId) {
+      console.log("No news ID in notification");
       return;
     }
     
     try {
       setLoading(true);
       // Fetch the article data from Firestore
-      const articleRef = doc(db, "news", notification.data.articleId);
+      const articleRef = doc(db, "news", notification.newsId);
       const articleSnap = await getDoc(articleRef);
       
       if (articleSnap.exists()) {
@@ -106,10 +123,17 @@ export default function UserNotificationScreen() {
         };
         
         console.log("Article data loaded:", articleWithId.title);
+        
+        // Mark article as watched immediately when opened from notification
+        if (currentUser?.id && articleWithId.id) {
+          await addWatchedNews(currentUser.id, articleWithId.id);
+          console.log(`Article ${articleWithId.id} marked as watched`);
+        }
+        
         setSelectedArticle(articleWithId);
         setModalVisible(true);
       } else {
-        console.log("No article found with ID:", notification.data.articleId);
+        console.log("No article found with ID:", notification.newsId);
         Alert.alert(
           "Article Not Found", 
           "This article is no longer available.",
@@ -129,140 +153,88 @@ export default function UserNotificationScreen() {
   };
 
   // Handle article action (like/dislike)
-  const handleArticleAction = (articleId: string, action: string) => {
+  const handleArticleAction = async (articleId: string, action: string) => {
     console.log(`Article ${articleId} was ${action}ed`);
-    // Refresh notifications after article action if needed
-    refreshNotifications();
-  };
-  
-  // Refresh notifications
-  const refreshNotifications = async () => {
-    try {
-      setLoading(true);
-      if (currentUser?.id) {
-        const userNotifications = await getUserNotifications();
-        setNotifications(userNotifications);
-      }
-    } catch (error) {
-      console.error("Error refreshing notifications:", error);
-    } finally {
-      setLoading(false);
+    
+    // When an article is liked or disliked, update the user data
+    const updatedUser = await getUser(currentUser.id);
+    if (updatedUser) {
+      setCurrentUser({...updatedUser, id: currentUser.id});
     }
+    
+    // Update the notifications that correspond to this article to show they've been seen
+    setNotifications(prevNotifications => 
+      prevNotifications.map(notification => {
+        if (notification.newsId === articleId) {
+          return { ...notification, isSeen: true };
+        }
+        return notification;
+      })
+    );
   };
 
   // Close modal handler
-  const handleCloseModal = () => {
+  const handleCloseModal = async () => {
     setModalVisible(false);
-  };
-  
-  // Clear all notifications
-  const handleClearAll = async () => {
-    if (!currentUser?.id) return;
     
-    Alert.alert(
-      "Clear All Notifications",
-      "Are you sure you want to clear all notifications?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Clear All", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await clearAllNotifications();
-              setNotifications([]);
-            } catch (error) {
-              console.error("Error clearing notifications:", error);
-              Alert.alert("Error", "Failed to clear notifications");
-            } finally {
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-  
-  // Add mock notifications (for testing)
-  const handleAddMockNotifications = async () => {
-    if (!currentUser?.id) return;
-    
-    try {
-      setLoading(true);
-      
-      // Create some mock notifications
-      const success = await addMockNotifications(5);
-      
-      if (success) {
-        await refreshNotifications();
-        Alert.alert("Success", "Mock notifications added");
-      } else {
-        Alert.alert("Error", "Failed to add mock notifications");
+    // After closing the modal, refresh the user data
+    // to ensure liked_news and disliked_news are up to date
+    if (currentUser?.id) {
+      const updatedUser = await getUser(currentUser.id);
+      if (updatedUser) {
+        setCurrentUser({...updatedUser, id: currentUser.id});
       }
-    } catch (error) {
-      console.error("Error adding mock notifications:", error);
-      Alert.alert("Error", "Failed to add mock notifications");
-    } finally {
-      setLoading(false);
     }
-  };
-
-  // Create a very simple mock notification directly (fallback if other methods fail)
-  const createSimpleMockNotification = () => {
-    const now = new Date();
-    const mockNotification = new Notification(
-      `notif_${Date.now()}`,
-      "Test Notification",
-      "This is a test notification created directly in the UI",
-      now.toISOString(),
-      "system",
-      {},
-      false
-    );
     
-    setNotifications(prevNotifications => [mockNotification, ...prevNotifications]);
+    setSelectedArticle(null);
   };
 
   // Render notification item with status indicator
-  const renderNotificationItem = ({ item }: { item: Notification }) => {
+  const renderNotificationItem = ({ item }: { item: UserNotification }) => {
     // Check if user has liked or disliked this article
-    const isLiked = currentUser?.liked_news?.includes(item.data?.articleId);
-    const isDisliked = currentUser?.disliked_news?.includes(item.data?.articleId);
+    const isLiked = item.newsId ? currentUser?.liked_news?.includes(item.newsId) : false;
+    const isDisliked = item.newsId ? currentUser?.disliked_news?.includes(item.newsId) : false;
+    const isWatched = item.newsId ? currentUser?.watched_news?.includes(item.newsId) : false;
     
     return (
       <TouchableOpacity 
-        style={[styles.notificationCard, !item.read && styles.unreadNotification]}
+        style={[styles.notificationCard, !item.isSeen && styles.unreadNotification]}
         onPress={() => handleNotificationPress(item)}
       >
         {/* Notification type icon */}
         <View style={styles.iconContainer}>
-          {item.type === 'article' && (
+          {item.newsId ? (
             <MaterialIcons name="article" size={24} color="#00bcd4" />
-          )}
-          {item.type === 'achievement' && (
-            <MaterialIcons name="emoji-events" size={24} color="#ffc107" />
-          )}
-          {item.type === 'system' && (
+          ) : (
             <Ionicons name="notifications" size={24} color="#9c27b0" />
           )}
         </View>
         
         <View style={styles.notificationContent}>
-          <Text style={styles.notificationTitle}>{item.title}</Text>
-          <Text style={styles.notificationMessage}>{item.message}</Text>
+          <Text style={styles.notificationTitle}>
+            {item.newsId ? "New Article" : "Notification"}
+          </Text>
+          <Text style={styles.notificationMessage}>{item.description}</Text>
           
-          {/* Article reaction indicators if applicable */}
-          {item.type === 'article' && (
+          {/* Show interaction indicators if applicable */}
+          {item.newsId && (
             <View style={styles.reactionContainer}>
-              {isLiked && (
-                <View style={styles.reactionBadge}>
-                  <Ionicons name="thumbs-up" size={14} color="#00bcd4" />
-                  <Text style={styles.reactionText}>Liked</Text>
+              {isWatched && (
+                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(76, 175, 80, 0.1)'}]}>
+                  <Ionicons name="eye" size={14} color="#4CAF50" />
+                  <Text style={[styles.reactionText, {color: '#4CAF50'}]}>Read</Text>
                 </View>
               )}
+              
+              {isLiked && (
+                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(0, 188, 212, 0.1)'}]}>
+                  <Ionicons name="thumbs-up" size={14} color="#00bcd4" />
+                  <Text style={[styles.reactionText, {color: '#00bcd4'}]}>Liked</Text>
+                </View>
+              )}
+              
               {isDisliked && (
-                <View style={styles.reactionBadge}>
+                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(244, 67, 54, 0.1)'}]}>
                   <Ionicons name="thumbs-down" size={14} color="#f44336" />
                   <Text style={[styles.reactionText, {color: '#f44336'}]}>Disliked</Text>
                 </View>
@@ -271,15 +243,11 @@ export default function UserNotificationScreen() {
           )}
           
           <Text style={styles.notificationTime}>
-            {typeof item.timestamp === 'string' 
-              ? new Date(item.timestamp).toLocaleString() 
-              : item.timestamp && typeof item.timestamp.toDate === 'function'
-                ? item.timestamp.toDate().toLocaleString()
-                : 'Recent'}
+            {new Date(item.date).toLocaleString()}
           </Text>
         </View>
         
-        {!item.read && <View style={styles.unreadIndicator} />}
+        {!item.isSeen && <View style={styles.unreadIndicator} />}
       </TouchableOpacity>
     );
   };
@@ -311,23 +279,6 @@ export default function UserNotificationScreen() {
         <View style={styles.centerContainer}>
           <Ionicons name="alert-circle-outline" size={64} color="#ffffff" />
           <Text style={styles.errorText}>{error}</Text>
-          
-          {/* Add test buttons for debugging */}
-          <View style={styles.debugButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.debugButton}
-              onPress={handleAddMockNotifications}
-            >
-              <Text style={styles.debugButtonText}>Add Mock Notifications</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.debugButton}
-              onPress={createSimpleMockNotification}
-            >
-              <Text style={styles.debugButtonText}>Add Simple Mock</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </LinearGradient>
     );
@@ -342,25 +293,6 @@ export default function UserNotificationScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.headerText}>Notifications</Text>
-        
-        {/* Add action buttons */}
-        {notifications.length > 0 && (
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={handleClearAll}
-            >
-              <Ionicons name="trash-outline" size={20} color="#ffffff" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={refreshNotifications}
-            >
-              <Ionicons name="refresh-outline" size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
       
       {!notifications.length ? (
@@ -370,21 +302,6 @@ export default function UserNotificationScreen() {
           <Text style={styles.emptySubtext}>
             We'll notify you when there's something new
           </Text>
-          
-          {/* For testing only - remove in production */}
-          <TouchableOpacity 
-            style={styles.testButton}
-            onPress={handleAddMockNotifications}
-          >
-            <Text style={styles.testButtonText}>Add Test Notifications</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.testButton}
-            onPress={createSimpleMockNotification}
-          >
-            <Text style={styles.testButtonText}>Add Simple Mock</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -393,7 +310,7 @@ export default function UserNotificationScreen() {
           renderItem={renderNotificationItem}
           contentContainerStyle={styles.listContainer}
           refreshing={loading}
-          onRefresh={refreshNotifications}
+          onRefresh={loadNotifications}
         />
       )}
       
@@ -429,18 +346,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
-  },
-  headerActions: {
-    flexDirection: 'row',
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
   },
   container: { 
     flex: 1, 
@@ -478,36 +383,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
-  },
-  testButton: {
-    marginTop: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-  },
-  testButtonText: {
-    color: '#fff',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
-  },
-  debugButtonsContainer: {
-    marginTop: 20,
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  debugButton: {
-    marginTop: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    width: 220,
-    alignItems: 'center',
-  },
-  debugButtonText: {
-    color: '#fff',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   listContainer: {
@@ -585,7 +460,7 @@ const styles = StyleSheet.create({
   reactionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 188, 212, 0.1)',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
     borderRadius: 12,
     paddingVertical: 3,
     paddingHorizontal: 8,
@@ -593,7 +468,6 @@ const styles = StyleSheet.create({
   },
   reactionText: {
     fontSize: 12,
-    color: '#00bcd4',
     marginLeft: 4,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
