@@ -1,137 +1,251 @@
 import {
-    doc,
-    setDoc,
-    getDoc,
-    updateDoc,
-    collection,
-    query,
-    getDocs,
-  } from "firebase/firestore";
-  import { db } from "../app/firebaseConfig";
-  
-  /**
-   * Achievement Class
-   *
-   * Represents an achievement with a unique id, a name, a photo (URL),
-   * an array of requirements, and the experience points (expPoints) it awards.
-   */
-  export class Achievement {
-    constructor(
-      public id: string,
-      public name: string,
-      public photo: string,           // URL or file path to the achievement image
-      public requirements: string[],  // Array of requirement strings
-      public expPoints: number        // Experience points awarded
-    ) {}
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "../app/firebaseConfig";
+import { getUser } from "./User";
+
+export class Achievement {
+  constructor(
+    public id: string,
+    public name: string,
+    public photo: string,           // URL or file path to the achievement image
+    public requirements: string[],  // Array of requirement strings
+    public expPoints: number,       // Experience points awarded
+    public requiredStreak?: number,      // Required login streak to earn this achievement
+    public requiredLikes?: number,       // Required number of article likes
+    public requiredDislikes?: number     // Required number of article dislikes
+  ) {}
+}
+
+const achievementConverter = {
+  toFirestore: (achievement: Achievement) => ({
+    name: achievement.name,
+    photo: achievement.photo,
+    requirements: achievement.requirements,
+    expPoints: achievement.expPoints,
+    requiredStreak: achievement.requiredStreak,
+    requiredLikes: achievement.requiredLikes,
+    requiredDislikes: achievement.requiredDislikes,
+  }),
+  fromFirestore: (snapshot: any, options: any): Achievement => {
+    const data = snapshot.data(options);
+    return new Achievement(
+      snapshot.id,
+      data.name,
+      data.photo,
+      data.requirements,
+      data.expPoints,
+      data.requiredStreak,
+      data.requiredLikes,
+      data.requiredDislikes
+    );
+  },
+};
+
+export const createAchievement = async (
+  achievement: Achievement
+): Promise<boolean> => {
+  try {
+    const achievementRef = doc(
+      db,
+      "achievements",
+      achievement.id
+    ).withConverter(achievementConverter);
+    await setDoc(achievementRef, achievement);
+    console.log(`Achievement ${achievement.id} created successfully`);
+    return true;
+  } catch (error) {
+    console.error("Error creating achievement:", error);
+    return false;
   }
-  
-  /**
-   * Firestore Data Converter for Achievement.
-   *
-   * This converter ensures that Achievement objects are properly formatted
-   * when being written to or read from Firestore.
-   */
-  const achievementConverter = {
-    toFirestore: (achievement: Achievement) => ({
-      name: achievement.name,
-      photo: achievement.photo,
-      requirements: achievement.requirements,
-      expPoints: achievement.expPoints,
-    }),
-    fromFirestore: (snapshot: any, options: any): Achievement => {
-      const data = snapshot.data(options);
-      return new Achievement(
-        snapshot.id,
-        data.name,
-        data.photo,
-        data.requirements,
-        data.expPoints
-      );
-    },
-  };
-  
-  /**
-   * Create a new Achievement document in Firestore.
-   * @param achievement - An Achievement instance to be stored.
-   * @returns True if the operation was successful, false otherwise.
-   */
-  export const createAchievement = async (
-    achievement: Achievement
-  ): Promise<boolean> => {
-    try {
-      const achievementRef = doc(
-        db,
-        "achievements",
-        achievement.id
-      ).withConverter(achievementConverter);
-      await setDoc(achievementRef, achievement);
-      console.log(`Achievement ${achievement.id} created successfully`);
-      return true;
-    } catch (error) {
-      console.error("Error creating achievement:", error);
-      return false;
+};
+
+
+export const getAchievement = async (
+  id: string
+): Promise<Achievement | null> => {
+  try {
+    const achievementRef = doc(
+      db,
+      "achievements",
+      id
+    ).withConverter(achievementConverter);
+    const achievementSnap = await getDoc(achievementRef);
+    return achievementSnap.exists() ? achievementSnap.data() : null;
+  } catch (error) {
+    console.error("Error fetching achievement:", error);
+    return null;
+  }
+};
+
+export const updateAchievement = async (
+  id: string,
+  updatedFields: Partial<Achievement>
+): Promise<boolean> => {
+  try {
+    const achievementRef = doc(db, "achievements", id);
+    await updateDoc(achievementRef, updatedFields);
+    console.log(`Achievement ${id} updated successfully`);
+    return true;
+  } catch (error) {
+    console.error("Error updating achievement:", error);
+    return false;
+  }
+};
+
+export const getAllAchievements = async (): Promise<Achievement[]> => {
+  try {
+    const achievementsRef = collection(db, "achievements").withConverter(
+      achievementConverter
+    );
+    const q = query(achievementsRef);
+    const snapshot = await getDocs(q);
+    const achievementsList: Achievement[] = [];
+    snapshot.forEach((doc) => achievementsList.push(doc.data()));
+    return achievementsList;
+  } catch (error) {
+    console.error("Error fetching achievements:", error);
+    return [];
+  }
+};
+
+/**
+ * Checks if a user meets the requirements for a specific achievement
+ * @param userId The user's ID
+ * @param achievementId The achievement ID to check
+ * @returns An object with result indicating if requirements are met and a message
+ */
+export const checkAchievementRequirements = async (
+  userId: string,
+  achievementId: string
+): Promise<{ met: boolean; message: string }> => {
+  try {
+    // Get user and achievement data
+    const user = await getUser(userId);
+    const achievement = await getAchievement(achievementId);
+
+    if (!user) {
+      return { met: false, message: "User not found" };
     }
-  };
-  
-  /**
-   * Retrieve an Achievement document from Firestore by its id.
-   * @param id - The unique identifier of the achievement.
-   * @returns The Achievement object if found, otherwise null.
-   */
-  export const getAchievement = async (
-    id: string
-  ): Promise<Achievement | null> => {
-    try {
-      const achievementRef = doc(
-        db,
-        "achievements",
-        id
-      ).withConverter(achievementConverter);
-      const achievementSnap = await getDoc(achievementRef);
-      return achievementSnap.exists() ? achievementSnap.data() : null;
-    } catch (error) {
-      console.error("Error fetching achievement:", error);
-      return null;
+
+    if (!achievement) {
+      return { met: false, message: "Achievement not found" };
     }
-  };
-  
-  /**
-   * Update an existing Achievement document.
-   * @param id - The unique identifier of the achievement to update.
-   * @param updatedFields - Partial fields of Achievement to update.
-   * @returns True if the update was successful, false otherwise.
-   */
-  export const updateAchievement = async (
-    id: string,
-    updatedFields: Partial<Achievement>
-  ): Promise<boolean> => {
-    try {
-      const achievementRef = doc(db, "achievements", id);
-      await updateDoc(achievementRef, updatedFields);
-      console.log(`Achievement ${id} updated successfully`);
-      return true;
-    } catch (error) {
-      console.error("Error updating achievement:", error);
-      return false;
+
+    // Check if user already has this achievement
+    if (user.achievements && user.achievements.includes(achievementId)) {
+      return { met: true, message: "Achievement already earned" };
     }
-  };
-  
-  /**
-   * Retrieve all Achievement documents from Firestore.
-   * @returns An array of Achievement objects.
-   */
-  export const getAllAchievements = async (): Promise<Achievement[]> => {
-    try {
-      const achievementsRef = collection(db, "achievements").withConverter(
-        achievementConverter
-      );
-      const q = query(achievementsRef);
-      const snapshot = await getDocs(q);
-      const achievementsList: Achievement[] = [];
-      snapshot.forEach((doc) => achievementsList.push(doc.data()));
-      return achievementsList;
-    } catch (error) {
-      console.error("Error fetching achievements:", error);
-      return [];
+
+    // Check streak requirement
+    if (achievement.requiredStreak && user.streak < achievement.requiredStreak) {
+      return { 
+        met: false, 
+        message: `Login streak requirement not met. Current: ${user.streak}, Required: ${achievement.requiredStreak}` 
+      };
     }
-  };
+
+    // Check likes requirement
+    if (achievement.requiredLikes && (!user.liked_news || user.liked_news.length < achievement.requiredLikes)) {
+      const currentLikes = user.liked_news ? user.liked_news.length : 0;
+      return { 
+        met: false, 
+        message: `Article likes requirement not met. Current: ${currentLikes}, Required: ${achievement.requiredLikes}` 
+      };
+    }
+
+    // Check dislikes requirement
+    if (achievement.requiredDislikes && (!user.disliked_news || user.disliked_news.length < achievement.requiredDislikes)) {
+      const currentDislikes = user.disliked_news ? user.disliked_news.length : 0;
+      return { 
+        met: false, 
+        message: `Article dislikes requirement not met. Current: ${currentDislikes}, Required: ${achievement.requiredDislikes}` 
+      };
+    }
+
+    // All requirements met
+    return { met: true, message: "All requirements met" };
+  } catch (error) {
+    console.error("Error checking achievement requirements:", error);
+    return { met: false, message: "Error checking requirements" };
+  }
+};
+
+/**
+ * Checks and awards an achievement to a user if they meet the requirements
+ * @param userId The user's ID
+ * @param achievementId The achievement ID to check and award
+ * @returns Boolean indicating success of the operation
+ */
+export const checkAndAwardAchievement = async (
+  userId: string,
+  achievementId: string
+): Promise<boolean> => {
+  try {
+    const result = await checkAchievementRequirements(userId, achievementId);
+    
+    if (result.met) {
+      // Only add if it's not already awarded (extra safety check)
+      const user = await getUser(userId);
+      if (user && (!user.achievements || !user.achievements.includes(achievementId))) {
+        // Get the achievement to add its experience points
+        const achievement = await getAchievement(achievementId);
+        
+        if (achievement) {
+          // Import functions from User.tsx
+          const { addUserAchievement, addExperience } = require('./User');
+          
+          // Add the achievement to the user
+          await addUserAchievement(userId, achievementId);
+          
+          // Add the experience points
+          await addExperience(userId, achievement.expPoints);
+          
+          console.log(`Achievement ${achievementId} awarded to user ${userId} with ${achievement.expPoints} XP`);
+          
+          // Create notification for the achievement
+          const { createNotification, addNotification } = require('./User');
+          const notification = createNotification(`Achievement unlocked: ${achievement.name}`);
+          await addNotification(userId, notification);
+          
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error("Error awarding achievement:", error);
+    return false;
+  }
+};
+
+/**
+ * Checks all available achievements for a user and awards any that they qualify for
+ * @param userId The user's ID
+ * @returns Number of new achievements awarded
+ */
+export const checkAllAchievements = async (userId: string): Promise<number> => {
+  try {
+    let newAchievementsCount = 0;
+    const achievements = await getAllAchievements();
+    
+    for (const achievement of achievements) {
+      const awarded = await checkAndAwardAchievement(userId, achievement.id);
+      if (awarded) {
+        newAchievementsCount++;
+      }
+    }
+    
+    return newAchievementsCount;
+  } catch (error) {
+    console.error("Error checking all achievements:", error);
+    return 0;
+  }
+};

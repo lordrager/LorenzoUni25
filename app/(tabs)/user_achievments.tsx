@@ -13,7 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { getUserAchievements } from '@/class/User';
-import { getAllAchievements } from '@/class/Achievments';
+import { getAllAchievements, checkAllAchievements, checkAchievementRequirements } from '@/class/Achievments';
 
 export default function UserAchievements() {
   const auth = getAuth();
@@ -22,6 +22,8 @@ export default function UserAchievements() {
   const [displayAchievements, setDisplayAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [checkingAchievements, setCheckingAchievements] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   // Toggle for using mock data for UI testing
   const useMockData = false;
@@ -36,6 +38,129 @@ export default function UserAchievements() {
     { id: '5', name: 'Social Butterfly', photo: 'users', requirements: ['Connect with 10 friends'], expPoints: 75 },
   ];
 
+  // Function to load user achievements and check for new ones
+  const loadAchievements = async (userId) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // First check if user qualifies for any new achievements
+      setCheckingAchievements(true);
+      const newAchievementsCount = await checkAllAchievements(userId);
+      setCheckingAchievements(false);
+      
+      // Now get the updated lists
+      const userAch = await getUserAchievements(userId);
+      setUserAchievements(userAch || []);
+      
+      const achievements = await getAllAchievements();
+      setAllAchievements(achievements);
+      
+      // If new achievements were unlocked, show a message
+      if (newAchievementsCount > 0) {
+        // You could add a toast notification or some UI feedback here
+        console.log(`${newAchievementsCount} new achievements unlocked!`);
+      }
+    } catch (error) {
+      console.error("Error loading achievements:", error);
+      setError("Failed to load achievements. Please try again later.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Check requirements for achievements to show progress
+  const checkRequirements = async (userId, achievements) => {
+    const updatedAchievements = [];
+    
+    for (const achievement of achievements) {
+      if (!achievement) {
+        console.warn("Encountered undefined achievement");
+        continue;
+      }
+      
+      if (userAchievements.includes(achievement.id)) {
+        // Already unlocked
+        updatedAchievements.push({
+          ...achievement,
+          isUnlocked: true,
+          progress: 100,
+          icon: achievement.photo || 'certificate',
+          progressMessage: "Completed!",
+          // Ensure consistent naming for XP display
+          expPoints: typeof achievement.expPoints === 'number' ? achievement.expPoints : 0
+        });
+      } else {
+        try {
+          // Check requirements
+          const result = await checkAchievementRequirements(userId, achievement.id);
+          
+          // Calculate progress if applicable
+          let progress = 0;
+          let progressMessage = "Not started";
+          
+          if (result && result.message) {
+            if (achievement.requiredStreak) {
+              // Find the streak requirement in the result message
+              const match = result.message.match(/Current: (\d+), Required: (\d+)/);
+              if (match) {
+                const current = parseInt(match[1]);
+                const required = parseInt(match[2]);
+                progress = Math.min(Math.floor((current / required) * 100), 99); // Cap at 99% if not complete
+                progressMessage = `${current}/${required} days`;
+              }
+            } else if (achievement.requiredLikes) {
+              const match = result.message.match(/Current: (\d+), Required: (\d+)/);
+              if (match) {
+                const current = parseInt(match[1]);
+                const required = parseInt(match[2]);
+                progress = Math.min(Math.floor((current / required) * 100), 99);
+                progressMessage = `${current}/${required} likes`;
+              }
+            } else if (achievement.requiredDislikes) {
+              const match = result.message.match(/Current: (\d+), Required: (\d+)/);
+              if (match) {
+                const current = parseInt(match[1]);
+                const required = parseInt(match[2]);
+                progress = Math.min(Math.floor((current / required) * 100), 99);
+                progressMessage = `${current}/${required} dislikes`;
+              }
+            }
+          }
+        
+        } catch (error) {
+          console.error(`Error checking requirements for achievement ${achievement.id}:`, error);
+          progress = 0;
+          progressMessage = "Error checking progress";
+        }
+        
+        updatedAchievements.push({
+          ...achievement,
+          isUnlocked: false,
+          progress,
+          icon: achievement.photo || 'certificate',
+          progressMessage,
+          // Ensure consistent naming for XP display
+          expPoints: typeof achievement.expPoints === 'number' ? achievement.expPoints : 0
+        });
+      }
+    }
+    
+    return updatedAchievements;
+  };
+
+  // Handle pull-to-refresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    const user = auth.currentUser;
+    if (user) {
+      loadAchievements(user.uid);
+    } else {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     if (useMockData) {
       // Simulate a delay for UI preview
@@ -48,41 +173,40 @@ export default function UserAchievements() {
       const unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (user) {
           console.log("User logged in, fetching achievements:", user.uid);
-          try {
-            // Get user's unlocked achievements
-            const userAch = await getUserAchievements(user.uid);
-            setUserAchievements(userAch || []);
-            
-            // Get all possible achievements
-            const achievements = await getAllAchievements();
-            setAllAchievements(achievements);
-          } catch (error) {
-            console.error("Error fetching achievements:", error);
-            setError("Failed to load achievements. Please try again later.");
-          }
+          await loadAchievements(user.uid);
         } else {
           console.log("User not logged in");
           setError("Please log in to view your achievements");
+          setLoading(false);
         }
-        setLoading(false);
       });
 
       return () => unsubscribe(); // Cleanup on unmount
     }
   }, []);
 
-  // Process achievements to show unlocked and locked ones
+  // Process achievements to show unlocked and locked ones with progress
   useEffect(() => {
-    if (allAchievements.length > 0) {
-      const processed = allAchievements.map(achievement => {
-        const isUnlocked = userAchievements.includes(achievement.id);
-        return {
-          ...achievement,
-          isUnlocked,
-          icon: achievement.photo || 'certificate' // Fallback icon
-        };
-      });
-      setDisplayAchievements(processed);
+    if (allAchievements.length > 0 && auth.currentUser) {
+      const processAchievements = async () => {
+        try {
+          const updatedAchievements = await checkRequirements(auth.currentUser.uid, allAchievements);
+          setDisplayAchievements(updatedAchievements);
+        } catch (error) {
+          console.error("Error processing achievements:", error);
+          // Fallback in case of error - display basic achievement data
+          const basicAchievements = allAchievements.map(achievement => ({
+            ...achievement,
+            isUnlocked: userAchievements.includes(achievement.id),
+            progress: userAchievements.includes(achievement.id) ? 100 : 0,
+            icon: achievement.photo || 'certificate',
+            progressMessage: userAchievements.includes(achievement.id) ? "Completed!" : "In progress"
+          }));
+          setDisplayAchievements(basicAchievements);
+        }
+      };
+      
+      processAchievements();
     }
   }, [userAchievements, allAchievements]);
 
@@ -96,7 +220,9 @@ export default function UserAchievements() {
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ffffff" />
-          <Text style={styles.loadingText}>Loading Achievements...</Text>
+          <Text style={styles.loadingText}>
+            {checkingAchievements ? 'Checking for new achievements...' : 'Loading Achievements...'}
+          </Text>
         </View>
       </LinearGradient>
     );
@@ -144,14 +270,29 @@ export default function UserAchievements() {
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
             {allAchievements.reduce((sum, achievement) => {
-              return userAchievements.includes(achievement.id) 
-                ? sum + achievement.expPoints 
-                : sum;
+              // Make sure we're accessing the correct field (expPoints) and it's a number
+              if (userAchievements.includes(achievement.id)) {
+                const points = typeof achievement.expPoints === 'number' ? achievement.expPoints : 0;
+                return sum + points;
+              }
+              return sum;
             }, 0)}
           </Text>
           <Text style={styles.statLabel}>XP Earned</Text>
         </View>
       </View>
+      
+      {/* Manual refresh button */}
+      <TouchableOpacity 
+        style={styles.refreshButton}
+        onPress={() => auth.currentUser && loadAchievements(auth.currentUser.uid)}
+        disabled={refreshing}
+      >
+        <Ionicons name="refresh" size={16} color="#ffffff" />
+        <Text style={styles.refreshText}>
+          {refreshing ? 'Checking...' : 'Check for New Achievements'}
+        </Text>
+      </TouchableOpacity>
       
       {displayAchievements.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -165,6 +306,8 @@ export default function UserAchievements() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={styles.achievementCard}
@@ -206,12 +349,30 @@ export default function UserAchievements() {
                   
                   {item.isUnlocked ? (
                     <Text style={styles.achievementDesc}>
-                      {item.requirements[0]}
+                      {item.requirements && item.requirements.length > 0 
+                        ? item.requirements[0] 
+                        : item.name}
                     </Text>
                   ) : (
-                    <View style={styles.lockedContainer}>
-                      <Ionicons name="lock-closed" size={12} color="#757575" />
-                      <Text style={styles.lockedText}>Locked</Text>
+                    <View>
+                      <View style={styles.lockedContainer}>
+                        <Ionicons name="lock-closed" size={12} color="#757575" />
+                        <Text style={styles.lockedText}>
+                          {item.requirements && item.requirements.length > 0 
+                            ? item.requirements[0] 
+                            : item.name} ({item.progressMessage})
+                        </Text>
+                      </View>
+                      
+                      {/* Progress bar */}
+                      <View style={styles.progressBarContainer}>
+                        <View 
+                          style={[
+                            styles.progressBar, 
+                            {width: `${item.progress}%`}
+                          ]} 
+                        />
+                      </View>
                     </View>
                   )}
                 </View>
@@ -265,9 +426,27 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 20,
+    marginBottom: 10,
+  },
+  refreshText: {
+    color: '#ffffff',
+    marginLeft: 8,
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
+  },
   statsContainer: {
     flexDirection: 'row',
     margin: 20,
+    marginBottom: 10,
     padding: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 12,
@@ -394,6 +573,17 @@ const styles = StyleSheet.create({
     marginLeft: 5,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
     fontStyle: 'italic',
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 3,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#00bcd4',
   },
   emptyContainer: {
     flex: 1,

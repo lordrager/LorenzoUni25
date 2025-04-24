@@ -3,6 +3,8 @@ import {
   arrayUnion, arrayRemove, increment, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../app/firebaseConfig";
+import { checkAllAchievements } from "./Achievments"; // Import the achievement checking function
+
 
 // Define the UserNotification interface
 export interface UserNotification {
@@ -180,6 +182,10 @@ export const updateStreak = async (uid: string) => {
       streak: newStreak,
       last_login: serverTimestamp()
     });
+    
+    // Check for new achievements after updating streak
+    await checkAllAchievements(uid);
+    
     return true;
   } catch (error) {
     console.error("Error updating streak:", error);
@@ -269,13 +275,16 @@ export const handleLogin = async (uid: string): Promise<boolean> => {
     });
     
     console.log(`User ${uid} logged in: streak updated to ${newStreak} and 10 experience points added.`);
+    
+    // Check for new achievements after login
+    await checkAllAchievements(uid);
+    
     return true;
   } catch (error) {
     console.error("Error handling user login:", error);
     return false;
   }
 };
-
 // Notification Management Functions
 
 /**
@@ -523,12 +532,17 @@ export const addLikedNews = async (uid: string, newsId: string): Promise<boolean
     });
     
     // Update the news document's likes field by incrementing it by 1
-    const newsRef = doc(db, "news", newsId);
-    await updateDoc(newsRef, {
+    // Note: This section is commented out in your current code
+     const newsRef = doc(db, "news", newsId);
+     await updateDoc(newsRef, {
       likes: increment(1)
     });
 
-    console.log(`News ${newsId} added to liked_news and watched_news for user ${uid}; likes incremented.`);
+    console.log(`News ${newsId} added to liked_news and watched_news for user ${uid}.`);
+    
+    // Check for new achievements after liking news
+    await checkAllAchievements(uid);
+    
     return true;
   } catch (error) {
     console.error("Error adding liked news:", error);
@@ -546,17 +560,21 @@ export const addDislikedNews = async (uid: string, newsId: string): Promise<bool
     });
     
     // Update the news document's dislikes field by incrementing it by 1
+    // Note: This section is commented out in your current code
     const newsRef = doc(db, "news", newsId);
-    await updateDoc(newsRef, {
+      await updateDoc(newsRef, {
       dislikes: increment(1)
     });
 
-    console.log(`News ${newsId} added to disliked_news and watched_news for user ${uid}; dislikes incremented.`);
+    console.log(`News ${newsId} added to disliked_news and watched_news for user ${uid}.`);
+    
+    // Check for new achievements after disliking news
+    await checkAllAchievements(uid);
+    
     return true;
   } catch (error) {
     console.error("Error adding disliked news:", error);
     return false;
   }
 };
-
 export default User;
