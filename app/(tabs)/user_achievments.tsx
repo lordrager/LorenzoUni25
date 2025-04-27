@@ -25,18 +25,6 @@ export default function UserAchievements() {
   const [checkingAchievements, setCheckingAchievements] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
-  // Toggle for using mock data for UI testing
-  const useMockData = false;
-
-  // Define mock achievements
-  const mockUserAchievements = ["1", "3"];
-  const mockAllAchievements = [
-    { id: '1', name: 'First Win', photo: 'trophy', requirements: ['Win your first game'], expPoints: 50 },
-    { id: '2', name: 'All-Star', photo: 'star', requirements: ['Score in every game'], expPoints: 100 },
-    { id: '3', name: 'Rocket Start', photo: 'rocket', requirements: ['Started your journey with a bang'], expPoints: 25 },
-    { id: '4', name: 'News Expert', photo: 'newspaper-o', requirements: ['Read 50 news articles'], expPoints: 150 },
-    { id: '5', name: 'Social Butterfly', photo: 'users', requirements: ['Connect with 10 friends'], expPoints: 75 },
-  ];
 
   // Function to load user achievements and check for new ones
   const loadAchievements = async (userId) => {
@@ -89,7 +77,7 @@ export default function UserAchievements() {
           icon: achievement.photo || 'certificate',
           progressMessage: "Completed!",
           // Ensure consistent naming for XP display
-          expPoints: typeof achievement.expPoints === 'number' ? achievement.expPoints : 0
+          experiencePoints: typeof achievement.experiencePoints === 'number' ? achievement.experiencePoints : 0
         });
       } else {
         try {
@@ -142,7 +130,7 @@ export default function UserAchievements() {
           icon: achievement.photo || 'certificate',
           progressMessage,
           // Ensure consistent naming for XP display
-          expPoints: typeof achievement.expPoints === 'number' ? achievement.expPoints : 0
+          experiencePoints: typeof achievement.experiencePoints === 'number' ? achievement.experiencePoints : 0
         });
       }
     }
@@ -162,14 +150,6 @@ export default function UserAchievements() {
   };
 
   useEffect(() => {
-    if (useMockData) {
-      // Simulate a delay for UI preview
-      setTimeout(() => {
-        setUserAchievements(mockUserAchievements);
-        setAllAchievements(mockAllAchievements);
-        setLoading(false);
-      }, 1000);
-    } else {
       const unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (user) {
           console.log("User logged in, fetching achievements:", user.uid);
@@ -182,7 +162,6 @@ export default function UserAchievements() {
       });
 
       return () => unsubscribe(); // Cleanup on unmount
-    }
   }, []);
 
   // Process achievements to show unlocked and locked ones with progress
@@ -270,9 +249,8 @@ export default function UserAchievements() {
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
             {allAchievements.reduce((sum, achievement) => {
-              // Make sure we're accessing the correct field (expPoints) and it's a number
               if (userAchievements.includes(achievement.id)) {
-                const points = typeof achievement.expPoints === 'number' ? achievement.expPoints : 0;
+                const points = typeof achievement.experiencePoints === 'number' ? achievement.experiencePoints : 0;
                 return sum + points;
               }
               return sum;
@@ -342,7 +320,7 @@ export default function UserAchievements() {
                     
                     {item.isUnlocked && (
                       <View style={styles.expBadge}>
-                        <Text style={styles.expText}>+{item.expPoints} XP</Text>
+                        <Text style={styles.expText}>+{item.experiencePoints} XP</Text>
                       </View>
                     )}
                   </View>

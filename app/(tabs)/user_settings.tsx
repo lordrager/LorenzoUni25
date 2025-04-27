@@ -1,14 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, Switch, Image, FlatList, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator, ScrollView 
+  View, 
+  Text, 
+  Switch, 
+  Image, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Modal, 
+  TextInput, 
+  ActivityIndicator, 
+  ScrollView,
+  Platform,
+  Alert
 } from 'react-native';
 import { getAuth, signOut, onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'expo-router';
-import { getUser, updateUserNotifications, updateProfileIcon, updateUsername } from '@/class/User';
+import { getUser, updateProfileIcon, updateUsername } from '@/class/User';
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
 
 const UserSettings = () => {
   const [user, setUser] = useState(null);
-  const [notifications, setNotifications] = useState(false);
   const [isLogoutModalVisible, setLogoutModalVisible] = useState(false);
   const [isProfileIconModalVisible, setProfileIconModalVisible] = useState(false);
   const [isUsernameModalVisible, setUsernameModalVisible] = useState(false);
@@ -26,20 +38,16 @@ const UserSettings = () => {
         console.log("User logged in:", currentUser.uid);
         try {
           const userData = await getUser(currentUser.uid);
-          if (userData && userData.notifications) {
-            setNotifications(userData.notifications);
-          } else {
-            setNotifications([]); // No notifications available
-          }
-          setUser(userData);
-          // Read dark mode setting from window.localStorage
+          setUser({...userData, id: currentUser.uid});
+          
+          // Read dark mode setting from localStorage
           const storedDarkMode = window.localStorage.getItem("darkMode");
           if (storedDarkMode !== null) {
             setDarkMode(JSON.parse(storedDarkMode));
           }
         } catch (err) {
-          console.error("Failed to load notifications.");
-          setError("Failed to load notifications.");
+          console.error("Failed to load user data:", err);
+          setError("Failed to load user profile.");
         } finally {
           setLoading(false);
         }
@@ -52,28 +60,47 @@ const UserSettings = () => {
     return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
-  const toggleNotifications = async () => {
-    if (!user) return;
-    const newStatus = !notifications;
-    setNotifications(newStatus);
-    await updateUserNotifications(user.id, newStatus);
-  };
-
   const changeProfileIcon = async () => {
-    if (newProfileIcon) {
+    if (!newProfileIcon) {
+      Alert.alert("Invalid Input", "Please enter a valid image URL");
+      return;
+    }
+    
+    try {
+      setLoading(true);
       await updateProfileIcon(user.id, newProfileIcon);
       setUser({ ...user, profileIcon: newProfileIcon });
       setProfileIconModalVisible(false);
+      Alert.alert("Success", "Profile picture updated successfully");
+    } catch (error) {
+      console.error("Error updating profile icon:", error);
+      Alert.alert("Error", "Failed to update profile picture");
+    } finally {
+      setLoading(false);
     }
   };
 
   const changeUsername = async () => {
-    if (newUsername) {
-      const success = await updateUsername(user.uid, newUsername);
+    if (!newUsername || newUsername.trim() === '') {
+      Alert.alert("Invalid Input", "Username cannot be empty");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const success = await updateUsername(user.id, newUsername);
       if (success) {
         setUser({ ...user, profileName: newUsername });
-        console.log("Username updated:", newUsername);
+        setUsernameModalVisible(false);
+        Alert.alert("Success", "Username updated successfully");
+      } else {
+        Alert.alert("Error", "Failed to update username");
       }
+    } catch (error) {
+      console.error("Error updating username:", error);
+      Alert.alert("Error", "Failed to update username");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -91,96 +118,183 @@ const UserSettings = () => {
       console.log('User logged out');
     } catch (error) {
       console.error('Logout failed:', error);
+      Alert.alert("Error", "Failed to log out. Please try again.");
     }
     setLogoutModalVisible(false);
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text>Loading user data...</Text>
-      </View>
+      <LinearGradient
+        colors={['#4dc9ff', '#00bfa5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientContainer}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={styles.loadingText}>Loading user data...</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>No user data found.</Text>
-      </View>
+      <LinearGradient
+        colors={['#4dc9ff', '#00bfa5']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientContainer}
+      >
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>No user data found. Please log in again.</Text>
+          <TouchableOpacity 
+            style={styles.returnButton} 
+            onPress={() => router.replace("/")}
+          >
+            <Text style={styles.buttonText}>Return to Login</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, darkMode && styles.darkContainer]}>
-      {/* Profile Section */}
-      <View style={styles.profileSection}>
-        <Image source={{ uri: user.profileIcon || 'https://example.com/user-avatar.png' }} style={styles.profileIcon} />
-        <Text style={styles.profileName}>{user.profileName}</Text>
-        <TouchableOpacity onPress={() => setProfileIconModalVisible(true)} style={styles.iconChangeButton}>
-          <Text style={styles.iconChangeText}>Change Profile Icon</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { setNewUsername(user.profileName); setUsernameModalVisible(true); }} style={styles.iconChangeButton}>
-          <Text style={styles.iconChangeText}>Change Username</Text>
-        </TouchableOpacity>
-      </View>
+    <LinearGradient
+      colors={['#4dc9ff', '#00bfa5']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradientContainer}
+    >
+      <ScrollView style={styles.scrollView}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerText}>Profile Settings</Text>
+        </View>
+        
+        {/* Profile Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.avatarContainer}>
+            <Image 
+              source={{ uri: user.profileIcon || 'https://via.placeholder.com/150' }} 
+              style={styles.profileIcon} 
+            />
+            <TouchableOpacity 
+              style={styles.editAvatarButton}
+              onPress={() => {
+                setNewProfileIcon(user.profileIcon || '');
+                setProfileIconModalVisible(true);
+              }}
+            >
+              <Ionicons name="camera" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.userInfo}>
+            <Text style={styles.profileName}>{user.profileName || 'User'}</Text>
+            <TouchableOpacity 
+              style={styles.editNameButton}
+              onPress={() => { 
+                setNewUsername(user.profileName || ''); 
+                setUsernameModalVisible(true); 
+              }}
+            >
+              <Text style={styles.editNameText}>Edit Profile</Text>
+              <Ionicons name="pencil" size={14} color="#00bcd4" style={{marginLeft: 4}} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* User Info */}
-      <View style={styles.infoContainer}>
-        <Text style={styles.infoText}>Streak: {user.streak} days</Text>
-        <Text style={styles.infoText}>Level: {user.level}</Text>
-        <Text style={styles.infoText}>Experience: {user.experience} XP</Text>
-        <Text style={styles.infoText}>Rank: {user.rank}</Text>
-      </View>
+        {/* User Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{user.streak || 0}</Text>
+            <Text style={styles.statLabel}>Streak</Text>
+          </View>
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>Lvl {user.level || 1}</Text>
+            <Text style={styles.statLabel}>Level</Text>
+          </View>
+          
+          <View style={styles.statDivider} />
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{user.experience || 0}</Text>
+            <Text style={styles.statLabel}>XP</Text>
+          </View>
+        </View>
 
-      {/* Notifications Toggle */}
-      <View style={styles.toggleContainer}>
-        <Text style={styles.toggleText}>Enable Notifications</Text>
-        <Switch value={notifications} onValueChange={toggleNotifications} />
-      </View>
+        {/* Settings List */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          
+          {/* Dark Mode Toggle */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingContent}>
+              <Ionicons name="moon" size={22} color={darkMode ? "#00bcd4" : "#757575"} />
+              <Text style={styles.settingText}>Dark Mode</Text>
+            </View>
+            <Switch 
+              value={darkMode} 
+              onValueChange={handleDarkModeToggle}
+              trackColor={{ false: "#D1D1D1", true: "rgba(0, 188, 212, 0.4)" }}
+              thumbColor={darkMode ? "#00bcd4" : "#f4f3f4"}
+            />
+          </View>
+          
+          {/* Liked News */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/liked_news')}
+          >
+            <View style={styles.settingContent}>
+              <Ionicons name="heart" size={22} color="#757575" />
+              <Text style={styles.settingText}>Liked Articles</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="#757575" />
+          </TouchableOpacity>
+          
+          {/* Leaderboard */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/leaderboard')}
+          >
+            <View style={styles.settingContent}>
+              <Ionicons name="trophy" size={22} color="#757575" />
+              <Text style={styles.settingText}>Leaderboard</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="#757575" />
+          </TouchableOpacity>
+          
+          {/* Change Password */}
+          <TouchableOpacity 
+            style={styles.settingItem}
+            onPress={() => router.push('/change-password')}
+          >
+            <View style={styles.settingContent}>
+              <Ionicons name="lock-closed" size={22} color="#757575" />
+              <Text style={styles.settingText}>Change Password</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color="#757575" />
+          </TouchableOpacity>
+          
+          {/* Logout */}
+          <TouchableOpacity 
+            style={[styles.settingItem, styles.logoutItem]}
+            onPress={() => setLogoutModalVisible(true)}
+          >
+            <View style={styles.settingContent}>
+              <Ionicons name="log-out" size={22} color="#e53935" />
+              <Text style={[styles.settingText, styles.logoutText]}>Logout</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      {/* Dark Mode Toggle */}
-      <View style={styles.darkModeContainer}>
-        <Text style={styles.darkModeText}>Dark Mode</Text>
-        <Switch value={darkMode} onValueChange={handleDarkModeToggle} />
-      </View>
-
-      {/* Leaderboards Section (Touchable) */}
-      <TouchableOpacity onPress={() => router.push('/leaderboard')} style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>Leaderboards</Text>
-        <FlatList
-          data={user.leaderboard || []}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <Text style={styles.newsItem}>• {item.username}: {item.score}</Text>}
-        />
-      </TouchableOpacity>
-
-      {/* Liked News Section (Touchable) */}
-      <TouchableOpacity onPress={() => router.push('/liked_news')} style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>Liked News</Text>
-        <FlatList
-          data={user.likedNews}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <Text style={styles.newsItem}>• {item.title}</Text>}
-        />
-      </TouchableOpacity>
-
-      {/* Change Password Button (placed under Liked News) */}
-      <TouchableOpacity 
-        style={styles.changePasswordButton} 
-        onPress={() => router.push('/change-password')}
-      >
-        <Text style={styles.changePasswordButtonText}>Change Password</Text>
-      </TouchableOpacity>
-
-      {/* Logout Button */}
-      <TouchableOpacity 
-        style={styles.logoutButton} 
-        onPress={() => setLogoutModalVisible(true)}
-      >
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      </ScrollView>
 
       {/* Profile Icon Change Modal */}
       <Modal
@@ -191,20 +305,38 @@ const UserSettings = () => {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Profile Icon</Text>
+            <Text style={styles.modalTitle}>Change Profile Picture</Text>
+            
+            {user.profileIcon && (
+              <Image 
+                source={{ uri: user.profileIcon }} 
+                style={styles.previewImage} 
+              />
+            )}
+            
             <TextInput
               style={styles.inputField}
-              placeholder="Enter Image URL"
-              placeholderTextColor="#ccc"
+              placeholder="Enter image URL"
+              placeholderTextColor="#999"
               value={newProfileIcon}
               onChangeText={setNewProfileIcon}
             />
-            <TouchableOpacity style={styles.modalButton} onPress={changeProfileIcon}>
-              <Text style={styles.modalButtonText}>Change Icon</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setProfileIconModalVisible(false)}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setProfileIconModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={changeProfileIcon}
+              >
+                <Text style={styles.confirmButtonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -219,22 +351,31 @@ const UserSettings = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Change Username</Text>
+            
             <TextInput
               style={styles.inputField}
               placeholder="Enter new username"
-              placeholderTextColor="#ccc"
+              placeholderTextColor="#999"
               value={newUsername}
               onChangeText={setNewUsername}
+              autoCapitalize="none"
             />
-            <TouchableOpacity 
-              style={styles.modalButton} 
-              onPress={() => { changeUsername(); setUsernameModalVisible(false); }}
-            >
-              <Text style={styles.modalButtonText}>Change Username</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setUsernameModalVisible(false)}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setUsernameModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]} 
+                onPress={changeUsername}
+              >
+                <Text style={styles.confirmButtonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -250,15 +391,17 @@ const UserSettings = () => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalText}>Are you sure you want to logout?</Text>
-            <View style={styles.modalButtons}>
+            
+            <View style={styles.modalButtonContainer}>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelButton]} 
                 onPress={() => setLogoutModalVisible(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]} 
+                style={[styles.modalButton, styles.confirmButton, styles.logoutConfirmButton]} 
                 onPress={confirmLogout}
               >
                 <Text style={styles.confirmButtonText}>Logout</Text>
@@ -267,131 +410,220 @@ const UserSettings = () => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flexGrow: 1,
-    padding: 15, 
-    backgroundColor: '#333', 
-    alignItems: 'center' 
+  gradientContainer: {
+    flex: 1,
   },
-  darkContainer: { backgroundColor: '#000' },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
+  },
   loadingContainer: { 
     flex: 1, 
     justifyContent: 'center', 
-    alignItems: 'center' 
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: { 
+    fontSize: 16, 
+    color: "#ffffff",
+    marginTop: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
+  },
+  errorText: {
+    fontSize: 16, 
+    color: "#ffffff",
+    textAlign: "center",
+    marginBottom: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   profileSection: { 
-    alignItems: 'center', 
-    marginBottom: 15 
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    marginHorizontal: 15,
+    marginTop: 15,
+    borderRadius: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  avatarContainer: {
+    position: 'relative',
   },
   profileIcon: { 
     width: 80, 
     height: 80, 
     borderRadius: 40, 
-    marginBottom: 8, 
-    borderWidth: 2, 
-    borderColor: '#ddd' 
+    borderWidth: 3, 
+    borderColor: '#00bcd4' 
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#00bcd4',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfo: {
+    marginLeft: 15,
+    flex: 1,
   },
   profileName: { 
-    fontSize: 18, 
+    fontSize: 20, 
     fontWeight: 'bold', 
-    color: '#fff' 
+    color: '#333',
+    marginBottom: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
-  iconChangeButton: { 
-    marginTop: 5, 
-    padding: 8, 
-    backgroundColor: '#007AFF', 
-    borderRadius: 5 
+  editNameButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  iconChangeText: { 
-    color: '#fff', 
-    fontSize: 14 
+  editNameText: {
+    color: '#00bcd4',
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
-  infoContainer: { 
-    backgroundColor: '#444', 
-    padding: 10, 
-    borderRadius: 10, 
-    width: '100%', 
-    marginBottom: 15 
+  statsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 15,
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  infoText: { 
-    fontSize: 14, 
-    color: '#ddd', 
-    paddingVertical: 2 
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
   },
-  toggleContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    backgroundColor: '#444', 
-    padding: 10, 
-    borderRadius: 10, 
-    width: '100%', 
-    marginBottom: 15 
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#00bcd4',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
-  toggleText: { 
-    fontSize: 14, 
-    color: '#fff' 
+  statLabel: {
+    fontSize: 14,
+    color: '#757575',
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
-  darkModeContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    backgroundColor: '#444', 
-    padding: 10, 
-    borderRadius: 10, 
-    width: '100%', 
-    marginBottom: 15 
+  statDivider: {
+    width: 1,
+    height: '80%',
+    backgroundColor: '#e0e0e0',
+    alignSelf: 'center',
   },
-  darkModeText: { 
-    fontSize: 14, 
-    color: '#fff' 
+  settingsSection: {
+    marginHorizontal: 15,
+    marginTop: 15,
+    marginBottom: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
-  sectionContainer: {
-    width: '100%',
-    marginBottom: 15,
-    backgroundColor: '#444',
-    borderRadius: 10,
-    padding: 10,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
-  sectionTitle: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#fff',
-    marginBottom: 5,
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  newsItem: { 
-    fontSize: 12, 
-    color: '#bbb', 
-    paddingVertical: 3 
+  settingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  changePasswordButton: { 
-    marginVertical: 10, 
-    backgroundColor: '#007AFF', 
-    paddingVertical: 8, 
-    paddingHorizontal: 15, 
-    borderRadius: 10 
+  settingText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 15,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
-  changePasswordButtonText: { 
-    fontSize: 14, 
-    color: '#fff', 
-    fontWeight: 'bold' 
+  logoutItem: {
+    borderBottomWidth: 0,
   },
-  logoutButton: { 
-    marginTop: 15, 
-    backgroundColor: '#E63946', 
-    paddingVertical: 8, 
+  logoutText: {
+    color: '#e53935',
+  },
+  returnButton: { 
+    backgroundColor: "#00bcd4", 
+    paddingVertical: 10, 
     paddingHorizontal: 20, 
-    borderRadius: 10 
+    borderRadius: 8,
+    marginTop: 20, 
   },
-  logoutText: { 
+  buttonText: { 
+    color: "#ffffff", 
     fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#fff' 
+    fontWeight: "600",
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
   modalContainer: { 
     flex: 1, 
@@ -400,61 +632,91 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)' 
   },
   modalContent: { 
-    backgroundColor: '#444', 
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    width: '85%', 
     padding: 20, 
-    borderRadius: 10, 
-    width: '80%', 
-    alignItems: 'center' 
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   modalTitle: { 
-    fontSize: 18, 
+    fontSize: 20, 
     fontWeight: 'bold', 
-    marginBottom: 10, 
-    color: '#fff' 
+    marginBottom: 15, 
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
   modalText: { 
-    fontSize: 14, 
-    color: '#ddd', 
+    fontSize: 16, 
+    color: '#555', 
     textAlign: 'center', 
-    marginBottom: 20 
+    marginBottom: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
-  modalButtons: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    width: '100%' 
+  previewImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  inputField: { 
+    height: 45, 
+    borderColor: '#ddd', 
+    borderWidth: 1, 
+    borderRadius: 8, 
+    width: '100%', 
+    marginBottom: 20, 
+    paddingHorizontal: 12, 
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   modalButton: { 
     flex: 1, 
-    paddingVertical: 10, 
+    paddingVertical: 12, 
     alignItems: 'center', 
-    borderRadius: 5, 
-    marginHorizontal: 5 
+    borderRadius: 8, 
+    marginHorizontal: 5,
   },
   cancelButton: { 
-    backgroundColor: '#888' 
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   confirmButton: { 
-    backgroundColor: '#E63946' 
+    backgroundColor: '#00bcd4', 
+  },
+  logoutConfirmButton: {
+    backgroundColor: '#e53935',
   },
   cancelButtonText: { 
-    fontSize: 14, 
-    fontWeight: 'bold', 
-    color: '#fff' 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#555',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
   confirmButtonText: { 
-    fontSize: 14, 
-    fontWeight: 'bold', 
-    color: '#fff' 
-  },
-  inputField: { 
-    height: 35, 
-    borderColor: '#ddd', 
-    borderWidth: 1, 
-    borderRadius: 5, 
-    width: '100%', 
-    marginBottom: 10, 
-    paddingHorizontal: 8, 
-    color: '#fff' 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#fff',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
 });
 

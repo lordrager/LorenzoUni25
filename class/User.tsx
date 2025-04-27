@@ -193,19 +193,6 @@ export const updateStreak = async (uid: string) => {
   }
 };
 
-export const updateExperience = async (uid: string, points: number) => {
-  try {
-    const userRef = doc(db, "users", uid);
-    await updateDoc(userRef, {
-      experience: increment(points)
-    });
-    return true;
-  } catch (error) {
-    console.error("Error updating experience:", error);
-    return false;
-  }
-};
-
 export const addExperience = async (uid: string, points: number): Promise<boolean> => {
   try {
     const user = await getUser(uid);
@@ -214,7 +201,6 @@ export const addExperience = async (uid: string, points: number): Promise<boolea
     let newExp = user.experience + points;
     let newLevel = user.level;
     
-    // Level up logic: for every 100 experience, increment level and reset experience
     if (newExp >= 100) {
       const levelsGained = Math.floor(newExp / 100);
       newLevel += levelsGained;
@@ -233,7 +219,6 @@ export const addExperience = async (uid: string, points: number): Promise<boolea
     return false;
   }
 };
-
 export const handleLogin = async (uid: string): Promise<boolean> => {
   try {
     const user = await getUser(uid);
@@ -285,14 +270,7 @@ export const handleLogin = async (uid: string): Promise<boolean> => {
     return false;
   }
 };
-// Notification Management Functions
 
-/**
- * Add a notification to a user's notifications array
- * @param uid The user's ID
- * @param notification The notification object to add
- * @returns Boolean indicating success
- */
 export const addNotification = async (uid: string, notification: UserNotification): Promise<boolean> => {
   try {
     const userRef = doc(db, "users", uid);
@@ -307,13 +285,6 @@ export const addNotification = async (uid: string, notification: UserNotificatio
   }
 };
 
-/**
- * Update a specific notification in a user's notifications array
- * @param uid The user's ID
- * @param notificationId The ID of the notification to update
- * @param updatedNotification The updated notification object
- * @returns Boolean indicating success
- */
 export const updateUserNotification = async (
   uid: string, 
   notificationId: string, 
@@ -355,12 +326,6 @@ export const updateUserNotification = async (
   }
 };
 
-/**
- * Mark a notification as seen
- * @param uid The user's ID
- * @param notificationId The ID of the notification to mark as seen
- * @returns Boolean indicating success
- */
 export const markNotificationAsSeen = async (
   uid: string,
   notificationId: string
@@ -393,12 +358,6 @@ export const markNotificationAsSeen = async (
   }
 };
 
-/**
- * Create a new notification object
- * @param description The notification message
- * @param newsId Optional ID of associated news article
- * @returns A UserNotification object
- */
 export const createNotification = (
   description: string,
   newsId?: string
@@ -415,11 +374,6 @@ export const createNotification = (
   };
 };
 
-/**
- * Get all notifications for a user
- * @param uid The user's ID
- * @returns Array of notifications or empty array if none found
- */
 export const getUserNotifications = async (uid: string): Promise<UserNotification[]> => {
   try {
     const user = await getUser(uid);
@@ -433,68 +387,6 @@ export const getUserNotifications = async (uid: string): Promise<UserNotificatio
     console.error("Error getting user notifications:", error);
     return [];
   }
-};
-
-/**
- * Delete a specific notification
- * @param uid The user's ID
- * @param notificationId The ID of the notification to delete
- * @returns Boolean indicating success
- */
-export const deleteNotification = async (
-  uid: string,
-  notificationId: string
-): Promise<boolean> => {
-  try {
-    // Get the user data
-    const user = await getUser(uid);
-    if (!user) {
-      console.error("User not found");
-      return false;
-    }
-    
-    // Find the notification
-    const notification = user.notifications.find(n => n.id === notificationId);
-    if (!notification) {
-      console.error(`Notification ${notificationId} not found`);
-      return false;
-    }
-    
-    // Create a new notifications array without the deleted notification
-    const updatedNotifications = user.notifications.filter(
-      n => n.id !== notificationId
-    );
-    
-    // Update the user document
-    const userRef = doc(db, "users", uid);
-    await updateDoc(userRef, { 
-      notifications: updatedNotifications 
-    });
-    
-    console.log(`Notification ${notificationId} deleted for user ${uid}`);
-    return true;
-  } catch (error) {
-    console.error("Error deleting notification:", error);
-    return false;
-  }
-};
-
-/**
- * Create a notification for a new article
- * @param uid The user's ID
- * @param articleId The article ID
- * @param articleTitle The article title
- * @returns Boolean indicating success
- */
-export const createArticleNotification = async (
-  uid: string,
-  articleId: string,
-  articleTitle: string
-): Promise<boolean> => {
-  const description = `New article: ${articleTitle}`;
-  const notification = createNotification(description, articleId);
-  
-  return await addNotification(uid, notification);
 };
 
 // Achievement Functions
@@ -578,3 +470,56 @@ export const addDislikedNews = async (uid: string, newsId: string): Promise<bool
   }
 };
 export default User;
+
+
+/*
+export const deleteNotification = async (
+  uid: string,
+  notificationId: string
+): Promise<boolean> => {
+  try {
+    // Get the user data
+    const user = await getUser(uid);
+    if (!user) {
+      console.error("User not found");
+      return false;
+    }
+    
+    // Find the notification
+    const notification = user.notifications.find(n => n.id === notificationId);
+    if (!notification) {
+      console.error(`Notification ${notificationId} not found`);
+      return false;
+    }
+    
+    // Create a new notifications array without the deleted notification
+    const updatedNotifications = user.notifications.filter(
+      n => n.id !== notificationId
+    );
+    
+    // Update the user document
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { 
+      notifications: updatedNotifications 
+    });
+    
+    console.log(`Notification ${notificationId} deleted for user ${uid}`);
+    return true;
+  } catch (error) {
+    console.error("Error deleting notification:", error);
+    return false;
+  }
+};
+
+
+export const createArticleNotification = async (
+  uid: string,
+  articleId: string,
+  articleTitle: string
+): Promise<boolean> => {
+  const description = `New article: ${articleTitle}`;
+  const notification = createNotification(description, articleId);
+  
+  return await addNotification(uid, notification);
+};
+*/

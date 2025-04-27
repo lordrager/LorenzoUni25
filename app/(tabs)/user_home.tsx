@@ -89,19 +89,14 @@ export default function UserHomeScreen() {
           // Fetch articles
           if (userData?.tags?.length) {
             const newsSnapshot = await getRecentNewsByTags(userData.tags);
-            console.log("Fetched news:", newsSnapshot.length ? "Found articles" : "No articles found");
             
             // Filter out already watched news
             const watchedNewsSet = new Set(userData.watched_news || []);
             const unseenNews = newsSnapshot.filter(
               (news) => !watchedNewsSet.has(news.id)
             );
-            
-            console.log(`Filtered to ${unseenNews.length} unseen articles`);
             setNewsArticles(unseenNews);
-          } else {
-            console.log("No tags found for user");
-          }
+          } 
 
           setLoading(false);
 
@@ -116,7 +111,6 @@ export default function UserHomeScreen() {
         return () => unsubscribe();
       } catch (err) {
         const errorMessage = err?.message || "Unknown error occurred";
-        console.error("Error in fetchUserAndNews:", errorMessage);
         setError(errorMessage);
         setLoading(false);
       }
@@ -132,7 +126,6 @@ export default function UserHomeScreen() {
     }
     
     try {
-      console.log("Marking article as watched from user_home:", articleId);
       await addWatchedNews(loggedUser.id, articleId);
       
       // Update local state
@@ -149,7 +142,6 @@ export default function UserHomeScreen() {
   // Handle Like function
   const handleLike = async () => {
     if (!loggedUser || !currentArticle) {
-      console.log("Cannot like: missing user or article");
       return;
     }
     
@@ -165,11 +157,8 @@ export default function UserHomeScreen() {
       const success = await addLikedNews(loggedUser.id, currentArticle.id);
       
       if (success) {
-        console.log("Successfully liked article");
         moveToNextArticle(currentArticle.id);
-      } else {
-        console.log("Failed to add article to liked news");
-      }
+      } 
     } catch (error) {
       console.error("Error liking article:", error);
     }
@@ -178,7 +167,6 @@ export default function UserHomeScreen() {
   // Handle Dislike function
   const handleDislike = async () => {
     if (!loggedUser || !currentArticle) {
-      console.log("Cannot dislike: missing user or article");
       return;
     }
     
@@ -194,11 +182,8 @@ export default function UserHomeScreen() {
       const success = await addDislikedNews(loggedUser.id, currentArticle.id);
       
       if (success) {
-        console.log("Successfully disliked article");
         moveToNextArticle(currentArticle.id);
-      } else {
-        console.log("Failed to add article to disliked news");
-      }
+      } 
     } catch (error) {
       console.error("Error disliking article:", error);
     }
@@ -221,9 +206,6 @@ export default function UserHomeScreen() {
 
   // Handle modal article actions
   const handleArticleAction = (articleId, action) => {
-    console.log(`Article ${articleId} was ${action}d in modal, updating home view`);
-    
-    // Mark as watched if applicable
     if (action === 'watched') {
       setWatchedArticles(prev => {
         const newSet = new Set(prev);
