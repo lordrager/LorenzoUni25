@@ -139,20 +139,6 @@ export const updateUsername = async (uid: string, newUsername: string): Promise<
   }
 };
 
-// Specific Field Updates
-export const addWatchedNews = async (uid: string, newsId: string) => {
-  try {
-    const userRef = doc(db, "users", uid);
-    await updateDoc(userRef, {
-      watched_news: arrayUnion(newsId)
-    });
-    return true;
-  } catch (error) {
-    console.error("Error adding watched news:", error);
-    return false;
-  }
-};
-
 export const updateStreak = async (uid: string) => {
   try {
     const user = await getUser(uid);
@@ -469,57 +455,49 @@ export const addDislikedNews = async (uid: string, newsId: string): Promise<bool
     return false;
   }
 };
-export default User;
 
-
-/*
-export const deleteNotification = async (
-  uid: string,
-  notificationId: string
-): Promise<boolean> => {
+export const removeLikedNews = async (uid: string, newsId: string): Promise<boolean> => {
   try {
-    // Get the user data
-    const user = await getUser(uid);
-    if (!user) {
-      console.error("User not found");
-      return false;
-    }
-    
-    // Find the notification
-    const notification = user.notifications.find(n => n.id === notificationId);
-    if (!notification) {
-      console.error(`Notification ${notificationId} not found`);
-      return false;
-    }
-    
-    // Create a new notifications array without the deleted notification
-    const updatedNotifications = user.notifications.filter(
-      n => n.id !== notificationId
-    );
-    
-    // Update the user document
     const userRef = doc(db, "users", uid);
-    await updateDoc(userRef, { 
-      notifications: updatedNotifications 
+    // Remove newsId from liked_news array
+    await updateDoc(userRef, {
+      liked_news: arrayRemove(newsId)
     });
     
-    console.log(`Notification ${notificationId} deleted for user ${uid}`);
+    // Update the news document's likes field by decrementing it by 1
+    const newsRef = doc(db, "news", newsId);
+    await updateDoc(newsRef, {
+      likes: increment(-1)
+    });
+
+    console.log(`News ${newsId} removed from liked_news for user ${uid}.`);
     return true;
   } catch (error) {
-    console.error("Error deleting notification:", error);
+    console.error("Error removing liked news:", error);
     return false;
   }
 };
 
+export const removeDislikedNews = async (uid: string, newsId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    // Remove newsId from disliked_news array
+    await updateDoc(userRef, {
+      disliked_news: arrayRemove(newsId)
+    });
+    
+    // Update the news document's dislikes field by decrementing it by 1
+    const newsRef = doc(db, "news", newsId);
+    await updateDoc(newsRef, {
+      dislikes: increment(-1)
+    });
 
-export const createArticleNotification = async (
-  uid: string,
-  articleId: string,
-  articleTitle: string
-): Promise<boolean> => {
-  const description = `New article: ${articleTitle}`;
-  const notification = createNotification(description, articleId);
-  
-  return await addNotification(uid, notification);
+    console.log(`News ${newsId} removed from disliked_news for user ${uid}.`);
+    return true;
+  } catch (error) {
+    console.error("Error removing disliked news:", error);
+    return false;
+  }
 };
-*/
+
+export default User;

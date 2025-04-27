@@ -5,7 +5,6 @@ import {
     updateUserNotification, 
     getUserNotifications as getUserNotificationsFromDB,
     markNotificationAsSeen,
-    deleteNotification
   } from './User';
   import { doc, updateDoc } from "firebase/firestore";
   import { db } from "../app/firebaseConfig";

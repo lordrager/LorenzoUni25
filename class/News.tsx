@@ -139,60 +139,6 @@ export const getAllNews = async () => {
   return querySnapshot;
 };
 
-// New function: Add mock news data to Firebase
-export const addMockNewsData = async () => {
-  const mockNews = [
-    new News(
-      "Breaking: Market Crash Expected",
-      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
-      120,
-      15,
-      "Stock markets are predicted to fall drastically due to global economic instability...",
-      "Markets may crash soon!",
-      ["finance", "stocks", "economy"],
-      "USA",
-      "New York",
-      0 // Initial total_views
-    ),
-    new News(
-      "Tech Giants Release New AI",
-      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
-      200,
-      10,
-      "Several major tech companies have unveiled their latest AI models, promising groundbreaking advancements...",
-      "New AI models announced!",
-      ["technology", "AI", "innovation"],
-      "UK",
-      "London",
-      0 // Initial total_views
-    ),
-    new News(
-      "Sports Finals: Historic Victory",
-      new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
-      300,
-      5,
-      "In an incredible turn of events, the underdogs secured a last-minute victory in the finals...",
-      "Underdogs win big!",
-      ["sports", "football", "championship"],
-      "Spain",
-      "Madrid",
-      0 // Initial total_views
-    )
-  ];
-
-  try {
-    for (const article of mockNews) {
-      const newsRef = doc(collection(db, "news").withConverter(newsConverter));
-      console.log("Adding mock news data...");
-      await setDoc(newsRef, newsConverter.toFirestore(article));
-      console.log(`Added news with ID: ${newsRef.id}`);
-    }
-    console.log("Mock news data added successfully.");
-  } catch (error) {
-    console.error("Error adding mock news data:", error);
-  }
-};
-
 export const updateNewsByTitle = async (title, updatedFields) => {
   try {
     const newsCollection = collection(db, "news").withConverter(newsConverter);
@@ -212,24 +158,39 @@ export const updateNewsByTitle = async (title, updatedFields) => {
   }
 };
 
-// Update news views and add to watched list
 export const addWatchedNews = async (userId, newsId) => {
   if (!userId || !newsId) return false;
   try {
     const userRef = doc(db, "users", userId);
     const newsRef = doc(db, "news", newsId);
     
+    // First check if the user already has this news in their watched_news array
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      console.log("User not found");
+      return false;
+    }
+    
+    const userData = userDoc.data();
+    const watchedNews = userData.watched_news || [];
+    const isAlreadyWatched = watchedNews.includes(newsId);
+    
     // Update user's watched_news array
     await updateDoc(userRef, {
       watched_news: arrayUnion(newsId),
     });
     
-    // Increment total_views in the news document
-    await updateDoc(newsRef, {
-      total_views: increment(1)
-    });
+    // Only increment total_views if the user hasn't watched this news before
+    if (!isAlreadyWatched) {
+      // Increment total_views in the news document
+      await updateDoc(newsRef, {
+        total_views: increment(1)
+      });
+      console.log(`News ${newsId} added to watched_news and view count incremented`);
+    } else {
+      console.log(`News ${newsId} is already in watched_news, view count not incremented`);
+    }
     
-    console.log(`News ${newsId} added to watched_news and view count incremented`);
     return true;
   } catch (error) {
     console.error("Error adding watched news:", error);

@@ -9,8 +9,8 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { updateNewsByTitle, incrementNewsLikes, incrementNewsDislikes } from "../class/News";
-import { addWatchedNews, addLikedNews, addDislikedNews, getUser } from "@/class/User";
+import { addWatchedNews} from "../class/News";
+import { addLikedNews, addDislikedNews, getUser, removeDislikedNews, removeLikedNews } from "@/class/User";
 
 interface ArticleModalProps {
   visible: boolean;
@@ -20,6 +20,7 @@ interface ArticleModalProps {
     content_long: string; 
     likes: number; 
     dislikes: number;
+    total_views: number;
     tags?: string[];
     date?: string;
   } | null;
@@ -37,6 +38,7 @@ export default function ArticleModal({
 }: ArticleModalProps) {
   const [likes, setLikes] = useState(article?.likes || 0);
   const [dislikes, setDislikes] = useState(article?.dislikes || 0);
+  const [totalViews, setTotalViews] = useState(article?.total_views || 0);
   const [likePressed, setLikesPressed] = useState(false);
   const [dislikesPressed, setDislikesPressed] = useState(false);
   const [actionPerformed, setActionPerformed] = useState(false);
@@ -152,51 +154,75 @@ export default function ArticleModal({
     const isAlreadyDisliked = userDislikedNews.includes(articleId);
     
     try {
-      if (isAlreadyLiked) {
-        console.log("Already liked this article, ignoring");
-        return;
-      }
       let success = false;
       
-      // Add to user's liked_news array - this will also handle the news document update
-      success = await addLikedNews(userId, articleId);
-      
-      if (success) {
-        console.log("Successfully liked article");
+      // If already liked, remove the like
+      if (isAlreadyLiked) {
+        success = await removeLikedNews(userId, articleId);
         
-        // Update UI state
-        setLikesPressed(true);
-        setDislikesPressed(false);
-        setActionPerformed(true);
-        
-        // Update local counts based on the transition
-        if (isAlreadyDisliked) {
-          // Switching from dislike to like
-          setLikes(likes + 1);
-          setDislikes(dislikes - 1);
-        } else {
-          // New like
-          setLikes(likes + 1);
+        if (success) {
+          // Update UI state
+          setLikesPressed(false);
+          setActionPerformed(true);
+          
+          // Update local count
+          setLikes(likes - 1);
+          
+          // Update local state arrays
+          setUserLikedNews(prev => prev.filter(id => id !== articleId));
         }
+      } 
+      // If already disliked, remove dislike and add like
+      else if (isAlreadyDisliked) {
+        // First remove the dislike
+        const removeDislikeSuccess = await removeDislikedNews(userId, articleId);
         
-        // Update local state arrays
-        setUserLikedNews(prev => [...prev, articleId]);
-        
-        // If it was previously disliked, remove from disliked array
-        if (isAlreadyDisliked) {
-          setUserDislikedNews(prev => prev.filter(id => id !== articleId));
+        if (removeDislikeSuccess) {
+          // Then add the like
+          success = await addLikedNews(userId, articleId);
+          
+          if (success) {
+            // Update UI state
+            setLikesPressed(true);
+            setDislikesPressed(false);
+            setActionPerformed(true);
+            
+            // Update local counts
+            setLikes(likes + 1);
+            setDislikes(dislikes - 1);
+            
+            // Update local state arrays
+            setUserLikedNews(prev => [...prev, articleId]);
+            setUserDislikedNews(prev => prev.filter(id => id !== articleId));
+          }
         }
+      } 
+      // Normal case - not liked or disliked yet
+      else {
+        success = await addLikedNews(userId, articleId);
         
-        // Mark article as watched if needed
-        if (!userWatchedNews.includes(articleId)) {
-          await markAsWatched(userId, articleId);
+        if (success) {     
+          // Update UI state
+          setLikesPressed(true);
+          setActionPerformed(true);
+          
+          // Update local count
+          setLikes(likes + 1);
+          
+          // Update local state arrays
+          setUserLikedNews(prev => [...prev, articleId]);
         }
       }
+      
+      // Mark article as watched if needed (in all cases)
+      if (!userWatchedNews.includes(articleId)) {
+        await markAsWatched(userId, articleId);
+      }
     } catch (error) {
-      console.error("Error liking article:", error);
+      console.error("Error handling article like:", error);
     }
   };
-
+  
   const handleDislike = async () => {
     if (!article || !userId || isLoading) return;
     
@@ -207,48 +233,72 @@ export default function ArticleModal({
     const isAlreadyDisliked = userDislikedNews.includes(articleId);
     
     try {
-      if (isAlreadyDisliked) {
-        console.log("Already disliked this article, ignoring");
-        return;
-      }
       let success = false;
       
-      // Add to user's disliked_news array - this will also handle the news document update
-      success = await addDislikedNews(userId, articleId);
-      
-      if (success) {
-        console.log("Successfully disliked article");
+      // If already disliked, remove the dislike
+      if (isAlreadyDisliked) {
+        success = await removeDislikedNews(userId, articleId);
         
-        // Update UI state
-        setLikesPressed(false);
-        setDislikesPressed(true);
-        setActionPerformed(true);
-        
-        // Update local counts based on the transition
-        if (isAlreadyLiked) {
-          // Switching from like to dislike
-          setLikes(likes - 1);
-          setDislikes(dislikes + 1);
-        } else {
-          // New dislike
-          setDislikes(dislikes + 1);
+        if (success) {
+          // Update UI state
+          setDislikesPressed(false);
+          setActionPerformed(true);
+          
+          // Update local count
+          setDislikes(dislikes - 1);
+          
+          // Update local state arrays
+          setUserDislikedNews(prev => prev.filter(id => id !== articleId));
         }
+      } 
+      // If already liked, remove like and add dislike
+      else if (isAlreadyLiked) {
+        // First remove the like
+        const removeLikeSuccess = await removeLikedNews(userId, articleId);
         
-        // Update local state arrays
-        setUserDislikedNews(prev => [...prev, articleId]);
-        
-        // If it was previously liked, remove from liked array
-        if (isAlreadyLiked) {
-          setUserLikedNews(prev => prev.filter(id => id !== articleId));
+        if (removeLikeSuccess) {
+          // Then add the dislike
+          success = await addDislikedNews(userId, articleId);
+          
+          if (success) {
+            // Update UI state
+            setLikesPressed(false);
+            setDislikesPressed(true);
+            setActionPerformed(true);
+            
+            // Update local counts
+            setLikes(likes - 1);
+            setDislikes(dislikes + 1);
+            
+            // Update local state arrays
+            setUserDislikedNews(prev => [...prev, articleId]);
+            setUserLikedNews(prev => prev.filter(id => id !== articleId));
+          }
         }
+      } 
+      // Normal case - not liked or disliked yet
+      else {
+        success = await addDislikedNews(userId, articleId);
         
-        // Mark article as watched if needed
-        if (!userWatchedNews.includes(articleId)) {
-          await markAsWatched(userId, articleId);
+        if (success) {
+          // Update UI state
+          setDislikesPressed(true);
+          setActionPerformed(true);
+          
+          // Update local count
+          setDislikes(dislikes + 1);
+          
+          // Update local state arrays
+          setUserDislikedNews(prev => [...prev, articleId]);
         }
       }
+      
+      // Mark article as watched if needed (in all cases)
+      if (!userWatchedNews.includes(articleId)) {
+        await markAsWatched(userId, articleId);
+      }
     } catch (error) {
-      console.error("Error disliking article:", error);
+      console.error("Error handling article dislike:", error);
     }
   };
 
@@ -295,15 +345,8 @@ export default function ArticleModal({
               
               <View style={styles.metadataItem}>
                 <Ionicons name="eye-outline" size={16} color="#00bcd4" />
-                <Text style={styles.metadataText}>{likes + dislikes} views</Text>
+                <Text style={styles.metadataText}>{totalViews} views</Text>
               </View>
-              
-              {isMarkedAsWatched && (
-                <View style={styles.watchedIndicator}>
-                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
-                  <Text style={styles.watchedText}>Read</Text>
-                </View>
-              )}
             </View>
 
             {/* Tags if available */}
@@ -321,45 +364,44 @@ export default function ArticleModal({
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
               <Text style={styles.modalText}>{article.content_long}</Text>
             </ScrollView>
-
             {/* Like & Dislike Buttons */}
-            <View style={styles.actions}>
-              <TouchableOpacity 
-                style={[styles.button, likePressed && styles.likeButtonActive]} 
-                onPress={handleLike}
-                disabled={!userId || isLoading || userLikedNews.includes(article?.id || '')}
-              >
-                <Feather 
-                  name="thumbs-up" 
-                  size={24} 
-                  color={likePressed ? "#fff" : "#00bcd4"} 
-                />
-                <Text style={[
-                  styles.buttonText, 
-                  { color: likePressed ? "#fff" : "#00bcd4" }
-                ]}>
-                  {likes}
-                </Text>
-              </TouchableOpacity>
+<View style={styles.actions}>
+  <TouchableOpacity 
+    style={[styles.button, likePressed && styles.likeButtonActive]} 
+    onPress={handleLike}
+    disabled={!userId || isLoading}
+  >
+    <Feather 
+      name="thumbs-up" 
+      size={24} 
+      color={likePressed ? "#fff" : "#00bcd4"} 
+    />
+    <Text style={[
+      styles.buttonText, 
+      { color: likePressed ? "#fff" : "#00bcd4" }
+    ]}>
+      {likes}
+    </Text>
+  </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.button, dislikesPressed && styles.dislikeButtonActive]} 
-                onPress={handleDislike}
-                disabled={!userId || isLoading || userDislikedNews.includes(article?.id || '')}
-              >
-                <Feather 
-                  name="thumbs-down" 
-                  size={24} 
-                  color={dislikesPressed ? "#fff" : "#f44336"} 
-                />
-                <Text style={[
-                  styles.buttonText, 
-                  { color: dislikesPressed ? "#fff" : "#f44336" }
-                ]}>
-                  {dislikes}
-                </Text>
-              </TouchableOpacity>
-            </View>
+  <TouchableOpacity 
+    style={[styles.button, dislikesPressed && styles.dislikeButtonActive]} 
+    onPress={handleDislike}
+    disabled={!userId || isLoading}
+  >
+    <Feather 
+      name="thumbs-down" 
+      size={24} 
+      color={dislikesPressed ? "#fff" : "#f44336"} 
+    />
+    <Text style={[
+      styles.buttonText, 
+      { color: dislikesPressed ? "#fff" : "#f44336" }
+    ]}>
+      {dislikes}
+    </Text>
+  </TouchableOpacity>
+</View>
           </View>
         </View>
       </SafeAreaView>

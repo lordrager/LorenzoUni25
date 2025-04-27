@@ -13,10 +13,10 @@ import StreakModal from "@/components/streakmodal";
 import { router } from "expo-router";
 import { getRecentNewsByTags, incrementNewsLikes, incrementNewsDislikes } from "../../class/News";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import {addWatchedNews} from "../../class/News";
 import {
   getUser,
   updateStreak,
-  addWatchedNews,
   addLikedNews,
   addDislikedNews,
 } from "@/class/User";

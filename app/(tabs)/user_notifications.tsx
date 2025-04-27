@@ -10,7 +10,6 @@ import {
   Alert
 } from "react-native";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getUser, UserNotification, markNotificationAsSeen, addWatchedNews } from "@/class/User";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebaseConfig";
@@ -21,6 +20,7 @@ import {
   setCurrentUserId, 
   getUserNotifications as getNotifications
 } from "@/class/NotificationService";
+import { getUser, UserNotification, markNotificationAsSeen } from "@/class/User";
 
 export default function UserNotificationScreen() {
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
@@ -37,12 +37,12 @@ export default function UserNotificationScreen() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("User logged in:", user.uid);
         try {
           // Set user ID in notification service
           setCurrentUserId(user.uid);
           
           const userData = await getUser(user.uid);
+          console.log("User data:", userData);
           if (userData) {
             setCurrentUser({...userData, id: user.uid});
             
@@ -70,7 +70,6 @@ export default function UserNotificationScreen() {
       
       // Get notifications from service
       const userNotifications = await getNotifications();
-      
       // Sort notifications by date (newest first)
       const sortedNotifications = [...userNotifications].sort((a, b) => {
         return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -123,12 +122,6 @@ export default function UserNotificationScreen() {
         };
         
         console.log("Article data loaded:", articleWithId.title);
-        
-        // Mark article as watched immediately when opened from notification
-        if (currentUser?.id && articleWithId.id) {
-          await addWatchedNews(currentUser.id, articleWithId.id);
-          console.log(`Article ${articleWithId.id} marked as watched`);
-        }
         
         setSelectedArticle(articleWithId);
         setModalVisible(true);
@@ -212,7 +205,7 @@ export default function UserNotificationScreen() {
         
         <View style={styles.notificationContent}>
           <Text style={styles.notificationTitle}>
-            {item.newsId ? "New Article" : "Notification"}
+            {item.newsId ? item.title : "Notification"}
           </Text>
           <Text style={styles.notificationMessage}>{item.description}</Text>
           
