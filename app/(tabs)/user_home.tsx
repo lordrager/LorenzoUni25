@@ -22,6 +22,7 @@ import {
 } from "@/class/User";
 import { Feather } from "@expo/vector-icons";
 import { BootstrapStyles } from "@/app/styles/bootstrap";
+import { useTheme } from '../ThemeContext';
 
 export default function UserHomeScreen() {
   const [newsArticles, setNewsArticles] = useState([]);
@@ -35,6 +36,9 @@ export default function UserHomeScreen() {
 
   const auth = getAuth();
   const currentArticle = newsArticles.length > 0 ? newsArticles[currentArticleIndex] : null;
+  
+  // Get theme context
+  const { darkMode } = useTheme();
 
   useEffect(() => {}, [firstLoginToday]);
 
@@ -225,10 +229,27 @@ export default function UserHomeScreen() {
     setModalVisible(false);
   };
 
+  // Theme-specific styles
+  const dynamicStyles = {
+    articleCard: {
+      backgroundColor: darkMode ? 'rgba(30, 30, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+      borderColor: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+    },
+    articleTitle: {
+      color: '#00bcd4',
+    },
+    articlePreview: {
+      color: darkMode ? '#e0e0e0' : '#333',
+    },
+    actionContainer: {
+      borderTopColor: darkMode ? '#333333' : '#f0f0f0',
+    },
+  };
+
   if (loading) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={BootstrapStyles.container}
@@ -246,7 +267,7 @@ export default function UserHomeScreen() {
   if (error) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={BootstrapStyles.container}
@@ -268,6 +289,7 @@ export default function UserHomeScreen() {
               level={loggedUser.level}
               experience={loggedUser.experience}
               onClose={() => setFirstLoginToday(false)}
+              isDarkMode={darkMode}
             />
           )}
         </View>
@@ -278,7 +300,7 @@ export default function UserHomeScreen() {
   if (!newsArticles.length) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={BootstrapStyles.container}
@@ -302,6 +324,7 @@ export default function UserHomeScreen() {
               level={loggedUser.level}
               experience={loggedUser.experience}
               onClose={() => setFirstLoginToday(false)}
+              isDarkMode={darkMode}
             />
           )}
         </View>
@@ -311,7 +334,7 @@ export default function UserHomeScreen() {
 
   return (
     <LinearGradient
-      colors={['#4dc9ff', '#00bfa5']}
+      colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -319,7 +342,7 @@ export default function UserHomeScreen() {
       <View style={styles.contentContainer}>
         {currentArticle && (
           <TouchableOpacity
-            style={styles.articleCard}
+            style={[styles.articleCard, dynamicStyles.articleCard]}
             onPress={() => setModalVisible(true)}
             activeOpacity={0.92}
           >
@@ -328,16 +351,16 @@ export default function UserHomeScreen() {
             
             {/* Article Title and Content */}
             <View style={styles.articleContent}>
-              <Text style={styles.articleTitle}>
+              <Text style={[styles.articleTitle, dynamicStyles.articleTitle]}>
                 {currentArticle.title}
               </Text>
-              <Text style={styles.articlePreview} numberOfLines={4}>
+              <Text style={[styles.articlePreview, dynamicStyles.articlePreview]} numberOfLines={4}>
                 {currentArticle.content_short}
               </Text>
             </View>
             
             {/* Article Actions */}
-            <View style={styles.actionContainer}>
+            <View style={[styles.actionContainer, dynamicStyles.actionContainer]}>
               <TouchableOpacity 
                 style={styles.dislikeButton}
                 onPress={handleDislike}
@@ -366,6 +389,7 @@ export default function UserHomeScreen() {
           userId={loggedUser?.id}
           onClose={handleCloseModal}
           onArticleAction={handleArticleAction}
+          isDarkMode={darkMode}
         />
       )}
 
@@ -377,6 +401,7 @@ export default function UserHomeScreen() {
           level={loggedUser.level}
           experience={loggedUser.experience}
           onClose={() => setFirstLoginToday(false)}
+          isDarkMode={darkMode}
         />
       )}
     </LinearGradient>
@@ -396,7 +421,6 @@ const styles = StyleSheet.create({
   },
   articleCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
@@ -415,7 +439,6 @@ const styles = StyleSheet.create({
       }
     }),
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   accentBorder: {
     position: 'absolute',
@@ -431,7 +454,6 @@ const styles = StyleSheet.create({
   articleTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#00bcd4',
     marginBottom: 16,
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
@@ -441,7 +463,6 @@ const styles = StyleSheet.create({
   articlePreview: {
     fontSize: 17,
     lineHeight: 26,
-    color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
     letterSpacing: 0.3,
   },
@@ -449,7 +470,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
     padding: 16,
   },
   likeButton: {

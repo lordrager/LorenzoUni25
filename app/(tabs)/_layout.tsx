@@ -1,10 +1,19 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
+import { ThemeProvider, useTheme } from '../ThemeContext';
 
-export default function TabLayout() {
+// Tabs component with theme awareness
+function TabLayoutContent() {
+  const { darkMode } = useTheme();
+  
   return (
     <Tabs screenOptions={{ 
-      tabBarActiveTintColor: 'blue',
+      tabBarActiveTintColor: '#00bcd4',
+      tabBarInactiveTintColor: darkMode ? '#999999' : '#666666',
+      tabBarStyle: {
+        backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
+        borderTopColor: darkMode ? '#333333' : '#e0e0e0',
+      },
       headerShown: false,
     }}>
       <Tabs.Screen
@@ -43,5 +52,14 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+// Main layout component that wraps everything with ThemeProvider
+export default function TabLayout() {
+  return (
+    <ThemeProvider>
+      <TabLayoutContent />
+    </ThemeProvider>
   );
 }

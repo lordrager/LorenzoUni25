@@ -500,4 +500,26 @@ export const removeDislikedNews = async (uid: string, newsId: string): Promise<b
   }
 };
 
+export const updateUserDarkMode = async (userId: string, darkMode: boolean): Promise<boolean> => {
+  try {
+    if (!userId) {
+      console.error("No user ID provided to updateUserDarkMode");
+      return false;
+    }
+    
+    const userRef = doc(db, "users", userId);
+    
+    await updateDoc(userRef, { 
+      darkMode: darkMode,
+      last_updated: new Date()
+    });
+    
+    console.log(`Updated dark mode preference for user ${userId}: ${darkMode ? 'enabled' : 'disabled'}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating user dark mode:", error);
+    return false;
+  }
+};
+
 export default User;

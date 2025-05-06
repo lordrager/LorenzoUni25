@@ -17,6 +17,10 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { router } from "expo-router";
 import { BootstrapStyles } from "@/app/styles/bootstrap";
+import { useTheme } from '../ThemeContext';
+import ArticleModal from "@/components/articlemodal";
+import { getUser } from "@/class/User";
+import { addWatchedNews } from "../../class/News";
 
 export default function UserSearchScreen() {
   const [searchText, setSearchText] = useState("");
@@ -32,20 +36,44 @@ export default function UserSearchScreen() {
   const [minViews, setMinViews] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Article modal states
+  const [articleModalVisible, setArticleModalVisible] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState(null);
+  const [loggedUser, setLoggedUser] = useState(null);
+  const [watchedArticles, setWatchedArticles] = useState(new Set());
 
   const auth = getAuth();
+  
+  // Get theme context
+  const { darkMode } = useTheme();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         console.log("User already logged in:", user.uid);
+        try {
+          const userData = await getUser(user.uid);
+          if (userData) {
+            setLoggedUser({...userData, id: user.uid});
+            
+            // Keep track of already watched articles
+            if (userData.watched_news) {
+              setWatchedArticles(new Set(userData.watched_news));
+            }
+          }
+          await fetchNews();
+        } catch (err) {
+          console.error("Error loading user data:", err);
+          setError("Failed to load user data");
+          setLoading(false);
+        }
       } else {
         console.log("User not logged in");
         router.replace("/"); // Redirect if not logged in
       }
     });
 
-    fetchNews();
     return () => unsubscribe(); // Cleanup on unmount
   }, []);
 
@@ -72,6 +100,8 @@ export default function UserSearchScreen() {
   };
 
   const filterData = (text, filter, region, country, city, date, likes, views) => {
+    if (!newsData.length) return;
+    
     let filtered = [...newsData];
 
     // Apply search filter
@@ -104,17 +134,18 @@ export default function UserSearchScreen() {
 
     // Apply date filter
     if (date) {
-      filtered = filtered.filter((item) => item.date?.seconds >= new Date(date).getTime());
+      const searchDate = new Date(date).getTime() / 1000;
+      filtered = filtered.filter((item) => item.date?.seconds >= searchDate);
     }
 
     // Apply likes filter
     if (likes) {
-      filtered = filtered.filter((item) => item.likes >= likes);
+      filtered = filtered.filter((item) => (item.likes || 0) >= parseInt(likes));
     }
 
     // Apply views filter
     if (views) {
-      filtered = filtered.filter((item) => item.total_views >= views);
+      filtered = filtered.filter((item) => (item.total_views || 0) >= parseInt(views));
     }
 
     // Apply sorting logic
@@ -150,34 +181,153 @@ export default function UserSearchScreen() {
     setIsModalVisible(false);
   };
 
+  // Article interaction functions
+  const handleArticlePress = (article) => {
+    setSelectedArticle(article);
+    setArticleModalVisible(true);
+  };
+
+  // Mark article as watched
+  const markArticleAsWatched = async (articleId) => {
+    if (!loggedUser || !articleId || watchedArticles.has(articleId)) {
+      return;
+    }
+    
+    try {
+      await addWatchedNews(loggedUser.id, articleId);
+      
+      // Update local state
+      setWatchedArticles(prev => {
+        const newSet = new Set(prev);
+        newSet.add(articleId);
+        return newSet;
+      });
+    } catch (error) {
+      console.error("Error marking article as watched:", error);
+    }
+  };
+
+  // Handle modal article actions
+  const handleArticleAction = async (articleId, action) => {
+    if (action === 'watched') {
+      setWatchedArticles(prev => {
+        const newSet = new Set(prev);
+        newSet.add(articleId);
+        return newSet;
+      });
+    }
+    
+    // Refresh user data after action
+    const userData = await getUser(loggedUser.id);
+    if (userData) {
+      setLoggedUser({...userData, id: loggedUser.id});
+    }
+  };
+
+  // Close modal handler
+  const handleCloseModal = () => {
+    setArticleModalVisible(false);
+    setSelectedArticle(null);
+  };
+
+  // Theme-specific styles
+  const dynamicStyles = {
+    searchInputContainer: {
+      backgroundColor: darkMode ? '#2d2d2d' : '#fff',
+    },
+    searchInput: {
+      color: darkMode ? '#ffffff' : '#333',
+    },
+    card: {
+      backgroundColor: darkMode ? 'rgba(30, 30, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+    },
+    cardTitle: {
+      color: '#00bcd4',
+    },
+    cardText: {
+      color: darkMode ? '#e0e0e0' : '#333',
+    },
+    metadataText: {
+      color: darkMode ? '#bdbdbd' : '#666',
+    },
+    tagsContainer: {
+      backgroundColor: darkMode ? '#2d2d2d' : '#f8f8f8',
+      borderTopColor: darkMode ? '#444444' : '#eee',
+    },
+    // Modal styles
+    modalBackground: {
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    },
+    modalContainer: {
+      backgroundColor: darkMode ? '#1e1e1e' : '#fff',
+    },
+    modalHeader: {
+      borderBottomColor: darkMode ? '#444444' : '#eee',
+    },
+    sectionTitle: {
+      color: darkMode ? '#e0e0e0' : '#333',
+    },
+    sortOption: {
+      borderColor: darkMode ? '#444444' : '#ddd',
+    },
+    sortOptionText: {
+      color: darkMode ? '#e0e0e0' : '#555',
+    },
+    inputContainer: {
+      borderColor: darkMode ? '#444444' : '#ddd',
+      backgroundColor: darkMode ? '#2d2d2d' : '#fff',
+    },
+    modalInput: {
+      color: darkMode ? '#ffffff' : '#333',
+    },
+    modalButtonContainer: {
+      borderTopColor: darkMode ? '#444444' : '#eee',
+    },
+    clearButton: {
+      borderColor: darkMode ? '#444444' : '#ddd',
+    },
+    clearButtonText: {
+      color: darkMode ? '#e0e0e0' : '#777',
+    },
+  };
+
   const renderItem = ({ item }) => {
     const formattedDate = item.date?.seconds
       ? new Date(item.date.seconds * 1000).toLocaleDateString()
       : "Unknown Date";
+      
+    const isLiked = loggedUser?.liked_news?.includes(item.id);
+    const isDisliked = loggedUser?.disliked_news?.includes(item.id);
+    const isWatched = watchedArticles.has(item.id);
 
     return (
       <TouchableOpacity 
-        style={styles.card}
+        style={[styles.card, dynamicStyles.card]}
         activeOpacity={0.92}
+        onPress={() => handleArticlePress(item)}
       >
         {/* Card Top Accent */}
         <View style={styles.cardAccent} />
         
         {/* Article Content */}
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={[styles.cardTitle, dynamicStyles.cardTitle]}>
+            {item.title}
+          </Text>
           
           {/* Metadata */}
           <View style={styles.metadataContainer}>
             <View style={styles.metadataItem}>
               <Ionicons name="calendar-outline" size={14} color="#00bcd4" />
-              <Text style={styles.metadataText}>{formattedDate}</Text>
+              <Text style={[styles.metadataText, dynamicStyles.metadataText]}>
+                {formattedDate}
+              </Text>
             </View>
             
             {item.country && (
               <View style={styles.metadataItem}>
                 <Ionicons name="location-outline" size={14} color="#00bcd4" />
-                <Text style={styles.metadataText}>
+                <Text style={[styles.metadataText, dynamicStyles.metadataText]}>
                   {item.city ? `${item.city}, ` : ''}
                   {item.country}
                 </Text>
@@ -187,17 +337,36 @@ export default function UserSearchScreen() {
             {(item.likes !== undefined || item.total_views !== undefined) && (
               <View style={styles.metadataItem}>
                 <Ionicons name="stats-chart-outline" size={14} color="#00bcd4" />
-                <Text style={styles.metadataText}>
+                <Text style={[styles.metadataText, dynamicStyles.metadataText]}>
                   {item.likes !== undefined ? `${item.likes} likes` : ''}
                   {item.likes !== undefined && item.total_views !== undefined ? ' · ' : ''}
                   {item.total_views !== undefined ? `${item.total_views} views` : ''}
                 </Text>
               </View>
             )}
+            
+            {/* Status indicators */}
+            <View style={styles.statusContainer}>
+              {isWatched && (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="eye" size={12} color="#4CAF50" />
+                </View>
+              )}
+              {isLiked && (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="thumbs-up" size={12} color="#00bcd4" />
+                </View>
+              )}
+              {isDisliked && (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="thumbs-down" size={12} color="#f44336" />
+                </View>
+              )}
+            </View>
           </View>
           
           {/* Content Preview */}
-          <Text style={styles.cardContent}>
+          <Text style={[styles.cardContent, dynamicStyles.cardText]} numberOfLines={4}>
             {item.content_short || "No content available"}
           </Text>
         </View>
@@ -207,7 +376,7 @@ export default function UserSearchScreen() {
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
-            style={styles.tagsContainer}
+            style={[styles.tagsContainer, dynamicStyles.tagsContainer]}
             contentContainerStyle={styles.tagsContent}
           >
             {item.tags.map((tag, idx) => (
@@ -223,7 +392,7 @@ export default function UserSearchScreen() {
 
   return (
     <LinearGradient
-      colors={['#4dc9ff', '#00bfa5']}
+      colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -233,12 +402,12 @@ export default function UserSearchScreen() {
       </View>
       
       <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Feather name="search" size={20} color="#777" style={styles.searchIcon} />
+        <View style={[styles.searchInputContainer, dynamicStyles.searchInputContainer]}>
+          <Feather name="search" size={20} color={darkMode ? "#aaa" : "#777"} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, dynamicStyles.searchInput]}
             placeholder="Search for articles..."
-            placeholderTextColor="#999"
+            placeholderTextColor={darkMode ? "#aaa" : "#999"}
             value={searchText}
             onChangeText={setSearchText}
           />
@@ -279,33 +448,35 @@ export default function UserSearchScreen() {
         visible={isModalVisible}
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
+        <View style={[styles.modalBackground, dynamicStyles.modalBackground]}>
+          <View style={[styles.modalContainer, dynamicStyles.modalContainer]}>
+            <View style={[styles.modalHeader, dynamicStyles.modalHeader]}>
               <Text style={styles.modalHeaderText}>Filter Articles</Text>
               <TouchableOpacity 
                 style={styles.modalCloseButton} 
                 onPress={() => setIsModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#777" />
+                <Ionicons name="close" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
             
             <ScrollView style={styles.modalScrollView}>
               {/* Sort Options */}
-              <Text style={styles.sectionTitle}>Sort By</Text>
+              <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Sort By</Text>
               <View style={styles.sortOptionsContainer}>
                 {["Relevance", "Newest"].map((filter) => (
                   <TouchableOpacity
                     key={filter}
                     style={[
                       styles.sortOption,
+                      dynamicStyles.sortOption,
                       selectedFilter === filter && styles.selectedSortOption,
                     ]}
                     onPress={() => setSelectedFilter(filter)}
                   >
                     <Text style={[
                       styles.sortOptionText,
+                      dynamicStyles.sortOptionText,
                       selectedFilter === filter && styles.selectedSortOptionText
                     ]}>
                       {filter}
@@ -315,74 +486,74 @@ export default function UserSearchScreen() {
               </View>
               
               {/* Location Filters */}
-              <Text style={styles.sectionTitle}>Location</Text>
+              <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Location</Text>
               
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="globe-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="Region..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   value={regionSearch}
                   onChangeText={setRegionSearch}
                 />
               </View>
               
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="flag-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="Country..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   value={countrySearch}
                   onChangeText={setCountrySearch}
                 />
               </View>
               
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="location-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="City..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   value={citySearch}
                   onChangeText={setCitySearch}
                 />
               </View>
               
               {/* Date Filter */}
-              <Text style={styles.sectionTitle}>Date</Text>
-              <View style={styles.inputContainer}>
+              <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Date</Text>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="calendar-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="Date (YYYY-MM-DD)..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   value={dateSearch}
                   onChangeText={setDateSearch}
                 />
               </View>
               
               {/* Engagement Filters */}
-              <Text style={styles.sectionTitle}>Engagement</Text>
-              <View style={styles.inputContainer}>
+              <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Engagement</Text>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="heart-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="Minimum likes..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   keyboardType="numeric"
                   value={minLikes}
                   onChangeText={setMinLikes}
                 />
               </View>
               
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, dynamicStyles.inputContainer]}>
                 <Ionicons name="eye-outline" size={20} color="#00bcd4" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.modalInput}
+                  style={[styles.modalInput, dynamicStyles.modalInput]}
                   placeholder="Minimum views..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={darkMode ? "#aaa" : "#999"}
                   keyboardType="numeric"
                   value={minViews}
                   onChangeText={setMinViews}
@@ -391,12 +562,12 @@ export default function UserSearchScreen() {
             </ScrollView>
             
             {/* Button Container */}
-            <View style={styles.modalButtonContainer}>
+            <View style={[styles.modalButtonContainer, dynamicStyles.modalButtonContainer]}>
               <TouchableOpacity 
-                style={styles.clearButton} 
+                style={[styles.clearButton, dynamicStyles.clearButton]} 
                 onPress={handleClearFilters}
               >
-                <Text style={styles.clearButtonText}>Clear All</Text>
+                <Text style={[styles.clearButtonText, dynamicStyles.clearButtonText]}>Clear All</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -409,6 +580,18 @@ export default function UserSearchScreen() {
           </View>
         </View>
       </Modal>
+      
+      {/* Article Modal */}
+      {selectedArticle && (
+        <ArticleModal
+          visible={articleModalVisible}
+          article={selectedArticle}
+          userId={loggedUser?.id}
+          onClose={handleCloseModal}
+          onArticleAction={handleArticleAction}
+          isDarkMode={darkMode}
+        />
+      )}
     </LinearGradient>
   );
 }
@@ -441,7 +624,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderRadius: 25,
     paddingHorizontal: 15,
     height: 45,
@@ -459,7 +641,6 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 16,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
-    color: '#333',
   },
   filterButton: {
     width: 45,
@@ -480,7 +661,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 15,
@@ -511,15 +691,14 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#00bcd4',
-    marginBottom:
-    8,
+    marginBottom: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
   metadataContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 10,
+    alignItems: 'center',
   },
   metadataItem: {
     flexDirection: 'row',
@@ -527,23 +706,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginBottom: 5,
   },
+  statusContainer: {
+    flexDirection: 'row',
+    marginLeft: 'auto',
+  },
+  statusBadge: {
+    marginLeft: 6,
+  },
   metadataText: {
     fontSize: 12,
-    color: '#666',
     marginLeft: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
-  },
-  cardPreview: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   tagsContainer: {
     maxHeight: 38,
-    backgroundColor: '#f8f8f8',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
   },
   tagsContent: {
     paddingHorizontal: 12,
@@ -605,7 +782,6 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: '85%',
     maxHeight: '80%',
-    backgroundColor: '#fff',
     borderRadius: 15,
     overflow: 'hidden',
     ...Platform.select({
@@ -627,7 +803,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     backgroundColor: '#00bcd4',
   },
   modalHeaderText: {
@@ -651,7 +826,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
     marginTop: 5,
     marginBottom: 10,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
@@ -665,7 +839,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#ddd',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -676,7 +849,6 @@ const styles = StyleSheet.create({
     borderColor: '#00bcd4',
   },
   sortOptionText: {
-    color: '#555',
     fontWeight: '500',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
@@ -687,7 +859,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     marginBottom: 15,
     paddingHorizontal: 10,
@@ -704,7 +875,6 @@ const styles = StyleSheet.create({
   modalButtonContainer: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
     padding: 15,
   },
   clearButton: {
@@ -713,12 +883,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 25,
     marginRight: 10,
   },
   clearButtonText: {
-    color: '#777',
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },

@@ -21,6 +21,7 @@ import {
   getUserNotifications as getNotifications
 } from "@/class/NotificationService";
 import { getUser, UserNotification, markNotificationAsSeen } from "@/class/User";
+import { useTheme } from '../ThemeContext';
 
 export default function UserNotificationScreen() {
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
@@ -33,6 +34,9 @@ export default function UserNotificationScreen() {
   const [selectedArticle, setSelectedArticle] = useState(null);
   
   const auth = getAuth();
+  
+  // Get theme context
+  const { darkMode } = useTheme();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -182,6 +186,29 @@ export default function UserNotificationScreen() {
     setSelectedArticle(null);
   };
 
+  // Theme-specific styles
+  const dynamicStyles = {
+    notificationCard: {
+      backgroundColor: darkMode ? 'rgba(30, 30, 30, 0.95)' : '#fff',
+    },
+    unreadNotification: {
+      backgroundColor: darkMode ? 'rgba(40, 40, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+      borderLeftColor: '#00bcd4',
+    },
+    iconContainer: {
+      backgroundColor: darkMode ? 'rgba(0, 188, 212, 0.15)' : 'rgba(0, 188, 212, 0.1)',
+    },
+    notificationTitle: {
+      color: darkMode ? '#ffffff' : '#333',
+    },
+    notificationMessage: {
+      color: darkMode ? '#e0e0e0' : '#555',
+    },
+    notificationTime: {
+      color: darkMode ? '#bdbdbd' : '#888',
+    },
+  };
+
   // Render notification item with status indicator
   const renderNotificationItem = ({ item }: { item: UserNotification }) => {
     // Check if user has liked or disliked this article
@@ -191,11 +218,15 @@ export default function UserNotificationScreen() {
     
     return (
       <TouchableOpacity 
-        style={[styles.notificationCard, !item.isSeen && styles.unreadNotification]}
+        style={[
+          styles.notificationCard, 
+          dynamicStyles.notificationCard,
+          !item.isSeen && [styles.unreadNotification, dynamicStyles.unreadNotification]
+        ]}
         onPress={() => handleNotificationPress(item)}
       >
         {/* Notification type icon */}
-        <View style={styles.iconContainer}>
+        <View style={[styles.iconContainer, dynamicStyles.iconContainer]}>
           {item.newsId ? (
             <MaterialIcons name="article" size={24} color="#00bcd4" />
           ) : (
@@ -204,30 +235,32 @@ export default function UserNotificationScreen() {
         </View>
         
         <View style={styles.notificationContent}>
-          <Text style={styles.notificationTitle}>
+          <Text style={[styles.notificationTitle, dynamicStyles.notificationTitle]}>
             {item.newsId ? item.title : "Notification"}
           </Text>
-          <Text style={styles.notificationMessage}>{item.description}</Text>
+          <Text style={[styles.notificationMessage, dynamicStyles.notificationMessage]}>
+            {item.description}
+          </Text>
           
           {/* Show interaction indicators if applicable */}
           {item.newsId && (
             <View style={styles.reactionContainer}>
               {isWatched && (
-                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(76, 175, 80, 0.1)'}]}>
+                <View style={[styles.reactionBadge, {backgroundColor: darkMode ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.1)'}]}>
                   <Ionicons name="eye" size={14} color="#4CAF50" />
                   <Text style={[styles.reactionText, {color: '#4CAF50'}]}>Read</Text>
                 </View>
               )}
               
               {isLiked && (
-                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(0, 188, 212, 0.1)'}]}>
+                <View style={[styles.reactionBadge, {backgroundColor: darkMode ? 'rgba(0, 188, 212, 0.15)' : 'rgba(0, 188, 212, 0.1)'}]}>
                   <Ionicons name="thumbs-up" size={14} color="#00bcd4" />
                   <Text style={[styles.reactionText, {color: '#00bcd4'}]}>Liked</Text>
                 </View>
               )}
               
               {isDisliked && (
-                <View style={[styles.reactionBadge, {backgroundColor: 'rgba(244, 67, 54, 0.1)'}]}>
+                <View style={[styles.reactionBadge, {backgroundColor: darkMode ? 'rgba(244, 67, 54, 0.15)' : 'rgba(244, 67, 54, 0.1)'}]}>
                   <Ionicons name="thumbs-down" size={14} color="#f44336" />
                   <Text style={[styles.reactionText, {color: '#f44336'}]}>Disliked</Text>
                 </View>
@@ -235,7 +268,7 @@ export default function UserNotificationScreen() {
             </View>
           )}
           
-          <Text style={styles.notificationTime}>
+          <Text style={[styles.notificationTime, dynamicStyles.notificationTime]}>
             {new Date(item.date).toLocaleString()}
           </Text>
         </View>
@@ -248,7 +281,7 @@ export default function UserNotificationScreen() {
   if (loading && !notifications.length) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientContainer}
@@ -264,7 +297,7 @@ export default function UserNotificationScreen() {
   if (error) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientContainer}
@@ -279,7 +312,7 @@ export default function UserNotificationScreen() {
 
   return (
     <LinearGradient
-      colors={['#4dc9ff', '#00bfa5']}
+      colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientContainer}
@@ -315,6 +348,7 @@ export default function UserNotificationScreen() {
           userId={currentUser?.id}
           onClose={handleCloseModal}
           onArticleAction={handleArticleAction}
+          isDarkMode={darkMode}
         />
       )}
     </LinearGradient>
@@ -383,7 +417,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   notificationCard: {
-    backgroundColor: "#fff",
     padding: 16,
     marginBottom: 12,
     borderRadius: 12,
@@ -403,9 +436,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   unreadNotification: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderLeftWidth: 3,
-    borderLeftColor: '#00bcd4',
   },
   iconContainer: {
     width: 48,
@@ -413,7 +444,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 188, 212, 0.1)',
     marginRight: 12,
   },
   notificationContent: {
@@ -423,18 +453,15 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     fontWeight: "bold", 
     marginBottom: 4,
-    color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
   notificationMessage: { 
     fontSize: 14, 
-    color: "#555", 
     marginBottom: 6,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   notificationTime: { 
     fontSize: 12, 
-    color: "#888", 
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   unreadIndicator: {
@@ -453,7 +480,6 @@ const styles = StyleSheet.create({
   reactionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
     borderRadius: 12,
     paddingVertical: 3,
     paddingHorizontal: 8,

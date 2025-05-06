@@ -14,6 +14,7 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { getUserAchievements } from '@/class/User';
 import { getAllAchievements, checkAllAchievements, checkAchievementRequirements } from '@/class/Achievments';
+import { useTheme } from '../ThemeContext';
 
 export default function UserAchievements() {
   const auth = getAuth();
@@ -25,6 +26,8 @@ export default function UserAchievements() {
   const [checkingAchievements, setCheckingAchievements] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
+  // Get theme context
+  const { darkMode } = useTheme();
 
   // Function to load user achievements and check for new ones
   const loadAchievements = async (userId) => {
@@ -189,10 +192,38 @@ export default function UserAchievements() {
     }
   }, [userAchievements, allAchievements]);
 
+  // Theme-specific styles
+  const dynamicStyles = {
+    card: {
+      backgroundColor: darkMode ? 'rgba(30, 30, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+    },
+    statsContainer: {
+      backgroundColor: darkMode ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+    },
+    statLabel: {
+      color: darkMode ? '#bdbdbd' : '#757575',
+    },
+    statTotal: {
+      color: darkMode ? '#bdbdbd' : '#757575',
+    },
+    statDivider: {
+      backgroundColor: darkMode ? '#444444' : '#e0e0e0',
+    },
+    achievementDesc: {
+      color: darkMode ? '#e0e0e0' : '#666',
+    },
+    lockedText: {
+      color: darkMode ? '#bdbdbd' : '#757575',
+    },
+    progressBarContainer: {
+      backgroundColor: darkMode ? '#444444' : '#e0e0e0',
+    },
+  };
+
   if (loading) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.container}
@@ -210,7 +241,7 @@ export default function UserAchievements() {
   if (error) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.container}
@@ -225,7 +256,7 @@ export default function UserAchievements() {
 
   return (
     <LinearGradient
-      colors={['#4dc9ff', '#00bfa5']}
+      colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -235,16 +266,16 @@ export default function UserAchievements() {
       </View>
       
       {/* Achievement Statistics */}
-      <View style={styles.statsContainer}>
+      <View style={[styles.statsContainer, dynamicStyles.statsContainer]}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
             {userAchievements.length}
-            <Text style={styles.statTotal}>/{allAchievements.length}</Text>
+            <Text style={[styles.statTotal, dynamicStyles.statTotal]}>/{allAchievements.length}</Text>
           </Text>
-          <Text style={styles.statLabel}>Unlocked</Text>
+          <Text style={[styles.statLabel, dynamicStyles.statLabel]}>Unlocked</Text>
         </View>
         
-        <View style={styles.statDivider} />
+        <View style={[styles.statDivider, dynamicStyles.statDivider]} />
         
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
@@ -256,7 +287,7 @@ export default function UserAchievements() {
               return sum;
             }, 0)}
           </Text>
-          <Text style={styles.statLabel}>XP Earned</Text>
+          <Text style={[styles.statLabel, dynamicStyles.statLabel]}>XP Earned</Text>
         </View>
       </View>
       
@@ -288,7 +319,7 @@ export default function UserAchievements() {
           refreshing={refreshing}
           renderItem={({ item }) => (
             <TouchableOpacity 
-              style={styles.achievementCard}
+              style={[styles.achievementCard, dynamicStyles.card]}
               activeOpacity={0.9}
             >
               {/* Card Top Accent */}
@@ -326,7 +357,7 @@ export default function UserAchievements() {
                   </View>
                   
                   {item.isUnlocked ? (
-                    <Text style={styles.achievementDesc}>
+                    <Text style={[styles.achievementDesc, dynamicStyles.achievementDesc]}>
                       {item.requirements && item.requirements.length > 0 
                         ? item.requirements[0] 
                         : item.name}
@@ -335,7 +366,7 @@ export default function UserAchievements() {
                     <View>
                       <View style={styles.lockedContainer}>
                         <Ionicons name="lock-closed" size={12} color="#757575" />
-                        <Text style={styles.lockedText}>
+                        <Text style={[styles.lockedText, dynamicStyles.lockedText]}>
                           {item.requirements && item.requirements.length > 0 
                             ? item.requirements[0] 
                             : item.name} ({item.progressMessage})
@@ -343,7 +374,7 @@ export default function UserAchievements() {
                       </View>
                       
                       {/* Progress bar */}
-                      <View style={styles.progressBarContainer}>
+                      <View style={[styles.progressBarContainer, dynamicStyles.progressBarContainer]}>
                         <View 
                           style={[
                             styles.progressBar, 
@@ -426,7 +457,6 @@ const styles = StyleSheet.create({
     margin: 20,
     marginBottom: 10,
     padding: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 12,
     ...Platform.select({
       ios: {
@@ -452,18 +482,15 @@ const styles = StyleSheet.create({
   },
   statTotal: {
     fontSize: 16,
-    color: '#757575',
   },
   statLabel: {
     fontSize: 12,
-    color: '#757575',
     marginTop: 4,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   statDivider: {
     width: 1,
     height: '80%',
-    backgroundColor: '#e0e0e0',
     marginHorizontal: 15,
     alignSelf: 'center',
   },
@@ -472,7 +499,6 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   achievementCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 15,
@@ -538,7 +564,6 @@ const styles = StyleSheet.create({
   },
   achievementDesc: {
     fontSize: 14,
-    color: '#666',
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   lockedContainer: {
@@ -547,14 +572,12 @@ const styles = StyleSheet.create({
   },
   lockedText: {
     fontSize: 14,
-    color: '#757575',
     marginLeft: 5,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
     fontStyle: 'italic',
   },
   progressBarContainer: {
     height: 6,
-    backgroundColor: '#e0e0e0',
     borderRadius: 3,
     marginTop: 6,
     overflow: 'hidden',

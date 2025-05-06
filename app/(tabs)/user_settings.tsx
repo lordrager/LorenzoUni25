@@ -18,6 +18,23 @@ import { useRouter } from 'expo-router';
 import { getUser, updateProfileIcon, updateUsername } from '@/class/User';
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { useTheme } from '../ThemeContext';
+
+// Add this function to your User class or create it as a separate function
+const updateUserDarkMode = async (userId, darkMode) => {
+  try {
+    // Import firebase functions if not already imported
+    const { doc, updateDoc } = await import('firebase/firestore');
+    const { db } = await import('../firebaseConfig');
+    
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { darkMode: darkMode });
+    return true;
+  } catch (error) {
+    console.error("Error updating user dark mode:", error);
+    return false;
+  }
+};
 
 const UserSettings = () => {
   const [user, setUser] = useState(null);
@@ -27,10 +44,12 @@ const UserSettings = () => {
   const [newProfileIcon, setNewProfileIcon] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [error, setError] = useState("");
   const auth = getAuth();
   const router = useRouter();
+  
+  // Get theme context
+  const { darkMode, setDarkMode } = useTheme();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -40,11 +59,11 @@ const UserSettings = () => {
           const userData = await getUser(currentUser.uid);
           setUser({...userData, id: currentUser.uid});
           
-          // Read dark mode setting from localStorage
-          const storedDarkMode = window.localStorage.getItem("darkMode");
-          if (storedDarkMode !== null) {
-            setDarkMode(JSON.parse(storedDarkMode));
+          // Set dark mode from user preferences if it exists
+          if (userData && userData.darkMode !== undefined) {
+            setDarkMode(userData.darkMode);
           }
+          
         } catch (err) {
           console.error("Failed to load user data:", err);
           setError("Failed to load user profile.");
@@ -104,11 +123,21 @@ const UserSettings = () => {
     }
   };
 
-  const handleDarkModeToggle = (value) => {
+  const handleDarkModeToggle = async (value) => {
+    // Update the theme context
     setDarkMode(value);
-    window.localStorage.setItem('darkMode', JSON.stringify(value));
+    
+    // Update the user object locally
     setUser({ ...user, darkMode: value });
-    console.log("Dark mode set to", value);
+    
+    // Save to database
+    if (user && user.id) {
+      try {
+        await updateUserDarkMode(user.id, value);
+      } catch (error) {
+        console.error("Failed to update dark mode setting:", error);
+      }
+    }
   };
 
   const confirmLogout = async () => {
@@ -123,10 +152,31 @@ const UserSettings = () => {
     setLogoutModalVisible(false);
   };
 
+  // Styles that depend on dark mode
+  const dynamicStyles = {
+    card: {
+      backgroundColor: darkMode ? '#1e1e1e' : 'rgba(255, 255, 255, 0.95)',
+      borderColor: darkMode ? '#333333' : '#e0e0e0',
+    },
+    text: {
+      color: darkMode ? '#ffffff' : '#333333',
+    },
+    modalContent: {
+      backgroundColor: darkMode ? '#121212' : '#ffffff',
+    },
+    modalText: {
+      color: darkMode ? '#e0e0e0' : '#555555',
+    },
+    border: {
+      borderColor: darkMode ? '#333333' : '#f0f0f0',
+    },
+    iconColor: darkMode ? '#00bcd4' : '#757575',
+  };
+
   if (loading) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientContainer}
@@ -142,7 +192,7 @@ const UserSettings = () => {
   if (!user) {
     return (
       <LinearGradient
-        colors={['#4dc9ff', '#00bfa5']}
+        colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientContainer}
@@ -162,7 +212,7 @@ const UserSettings = () => {
 
   return (
     <LinearGradient
-      colors={['#4dc9ff', '#00bfa5']}
+      colors={darkMode ? ['#00838f', '#00796b'] : ['#4dc9ff', '#00bfa5']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.gradientContainer}
@@ -174,7 +224,7 @@ const UserSettings = () => {
         </View>
         
         {/* Profile Section */}
-        <View style={styles.profileSection}>
+        <View style={[styles.profileSection, dynamicStyles.card]}>
           <View style={styles.avatarContainer}>
             <Image 
               source={{ uri: user.profileIcon || 'https://via.placeholder.com/150' }} 
@@ -192,7 +242,7 @@ const UserSettings = () => {
           </View>
           
           <View style={styles.userInfo}>
-            <Text style={styles.profileName}>{user.profileName || 'User'}</Text>
+            <Text style={[styles.profileName, dynamicStyles.text]}>{user.profileName || 'User'}</Text>
             <TouchableOpacity 
               style={styles.editNameButton}
               onPress={() => { 
@@ -207,36 +257,38 @@ const UserSettings = () => {
         </View>
 
         {/* User Stats */}
-        <View style={styles.statsContainer}>
+        <View style={[styles.statsContainer, dynamicStyles.card]}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{user.streak || 0}</Text>
-            <Text style={styles.statLabel}>Streak</Text>
+            <Text style={[styles.statLabel, { color: darkMode ? '#bdbdbd' : '#757575' }]}>Streak</Text>
           </View>
           
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: darkMode ? '#333333' : '#e0e0e0' }]} />
           
           <View style={styles.statItem}>
             <Text style={styles.statValue}>Lvl {user.level || 1}</Text>
-            <Text style={styles.statLabel}>Level</Text>
+            <Text style={[styles.statLabel, { color: darkMode ? '#bdbdbd' : '#757575' }]}>Level</Text>
           </View>
           
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: darkMode ? '#333333' : '#e0e0e0' }]} />
           
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{user.experience || 0}</Text>
-            <Text style={styles.statLabel}>XP</Text>
+            <Text style={[styles.statLabel, { color: darkMode ? '#bdbdbd' : '#757575' }]}>XP</Text>
           </View>
         </View>
 
         {/* Settings List */}
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Settings</Text>
+        <View style={[styles.settingsSection, dynamicStyles.card]}>
+          <Text style={[styles.sectionTitle, dynamicStyles.text, { borderBottomColor: darkMode ? '#333333' : '#f0f0f0' }]}>
+            Settings
+          </Text>
           
           {/* Dark Mode Toggle */}
-          <View style={styles.settingItem}>
+          <View style={[styles.settingItem, { borderBottomColor: darkMode ? '#333333' : '#f0f0f0' }]}>
             <View style={styles.settingContent}>
               <Ionicons name="moon" size={22} color={darkMode ? "#00bcd4" : "#757575"} />
-              <Text style={styles.settingText}>Dark Mode</Text>
+              <Text style={[styles.settingText, dynamicStyles.text]}>Dark Mode</Text>
             </View>
             <Switch 
               value={darkMode} 
@@ -248,38 +300,38 @@ const UserSettings = () => {
           
           {/* Liked News */}
           <TouchableOpacity 
-            style={styles.settingItem}
+            style={[styles.settingItem, { borderBottomColor: darkMode ? '#333333' : '#f0f0f0' }]}
             onPress={() => router.push('/liked_news')}
           >
             <View style={styles.settingContent}>
-              <Ionicons name="heart" size={22} color="#757575" />
-              <Text style={styles.settingText}>Liked Articles</Text>
+              <Ionicons name="heart" size={22} color={dynamicStyles.iconColor} />
+              <Text style={[styles.settingText, dynamicStyles.text]}>Liked Articles</Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color="#757575" />
+            <Ionicons name="chevron-forward" size={22} color={dynamicStyles.iconColor} />
           </TouchableOpacity>
           
           {/* Leaderboard */}
           <TouchableOpacity 
-            style={styles.settingItem}
+            style={[styles.settingItem, { borderBottomColor: darkMode ? '#333333' : '#f0f0f0' }]}
             onPress={() => router.push('/leaderboard')}
           >
             <View style={styles.settingContent}>
-              <Ionicons name="trophy" size={22} color="#757575" />
-              <Text style={styles.settingText}>Leaderboard</Text>
+              <Ionicons name="trophy" size={22} color={dynamicStyles.iconColor} />
+              <Text style={[styles.settingText, dynamicStyles.text]}>Leaderboard</Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color="#757575" />
+            <Ionicons name="chevron-forward" size={22} color={dynamicStyles.iconColor} />
           </TouchableOpacity>
           
           {/* Change Password */}
           <TouchableOpacity 
-            style={styles.settingItem}
+            style={[styles.settingItem, { borderBottomColor: darkMode ? '#333333' : '#f0f0f0' }]}
             onPress={() => router.push('/change-password')}
           >
             <View style={styles.settingContent}>
-              <Ionicons name="lock-closed" size={22} color="#757575" />
-              <Text style={styles.settingText}>Change Password</Text>
+              <Ionicons name="lock-closed" size={22} color={dynamicStyles.iconColor} />
+              <Text style={[styles.settingText, dynamicStyles.text]}>Change Password</Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color="#757575" />
+            <Ionicons name="chevron-forward" size={22} color={dynamicStyles.iconColor} />
           </TouchableOpacity>
           
           {/* Logout */}
@@ -304,8 +356,8 @@ const UserSettings = () => {
         onRequestClose={() => setProfileIconModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Profile Picture</Text>
+          <View style={[styles.modalContent, dynamicStyles.modalContent]}>
+            <Text style={[styles.modalTitle, dynamicStyles.text]}>Change Profile Picture</Text>
             
             {user.profileIcon && (
               <Image 
@@ -315,19 +367,23 @@ const UserSettings = () => {
             )}
             
             <TextInput
-              style={styles.inputField}
+              style={[styles.inputField, { 
+                backgroundColor: darkMode ? '#2d2d2d' : '#f9f9f9',
+                color: darkMode ? '#ffffff' : '#333333',
+                borderColor: darkMode ? '#444444' : '#ddd'
+              }]}
               placeholder="Enter image URL"
-              placeholderTextColor="#999"
+              placeholderTextColor={darkMode ? '#888888' : '#999999'}
               value={newProfileIcon}
               onChangeText={setNewProfileIcon}
             />
             
             <View style={styles.modalButtonContainer}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+                style={[styles.modalButton, styles.cancelButton, { borderColor: darkMode ? '#444444' : '#ddd' }]} 
                 onPress={() => setProfileIconModalVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, { color: darkMode ? '#e0e0e0' : '#555555' }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -349,13 +405,17 @@ const UserSettings = () => {
         onRequestClose={() => setUsernameModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Username</Text>
+          <View style={[styles.modalContent, dynamicStyles.modalContent]}>
+            <Text style={[styles.modalTitle, dynamicStyles.text]}>Change Username</Text>
             
             <TextInput
-              style={styles.inputField}
+              style={[styles.inputField, { 
+                backgroundColor: darkMode ? '#2d2d2d' : '#f9f9f9',
+                color: darkMode ? '#ffffff' : '#333333',
+                borderColor: darkMode ? '#444444' : '#ddd'
+              }]}
               placeholder="Enter new username"
-              placeholderTextColor="#999"
+              placeholderTextColor={darkMode ? '#888888' : '#999999'}
               value={newUsername}
               onChangeText={setNewUsername}
               autoCapitalize="none"
@@ -363,10 +423,10 @@ const UserSettings = () => {
             
             <View style={styles.modalButtonContainer}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+                style={[styles.modalButton, styles.cancelButton, { borderColor: darkMode ? '#444444' : '#ddd' }]} 
                 onPress={() => setUsernameModalVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, { color: darkMode ? '#e0e0e0' : '#555555' }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -388,16 +448,16 @@ const UserSettings = () => {
         onRequestClose={() => setLogoutModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Confirm Logout</Text>
-            <Text style={styles.modalText}>Are you sure you want to logout?</Text>
+          <View style={[styles.modalContent, dynamicStyles.modalContent]}>
+            <Text style={[styles.modalTitle, dynamicStyles.text]}>Confirm Logout</Text>
+            <Text style={[styles.modalText, dynamicStyles.modalText]}>Are you sure you want to logout?</Text>
             
             <View style={styles.modalButtonContainer}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
+                style={[styles.modalButton, styles.cancelButton, { borderColor: darkMode ? '#444444' : '#ddd' }]} 
                 onPress={() => setLogoutModalVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, { color: darkMode ? '#e0e0e0' : '#555555' }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -457,7 +517,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     marginHorizontal: 15,
     marginTop: 15,
     borderRadius: 12,
@@ -503,7 +562,6 @@ const styles = StyleSheet.create({
   profileName: { 
     fontSize: 20, 
     fontWeight: 'bold', 
-    color: '#333',
     marginBottom: 4,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
@@ -521,7 +579,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginTop: 15,
     padding: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     ...Platform.select({
       ios: {
@@ -547,21 +604,18 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 14,
-    color: '#757575',
     marginTop: 4,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   statDivider: {
     width: 1,
     height: '80%',
-    backgroundColor: '#e0e0e0',
     alignSelf: 'center',
   },
   settingsSection: {
     marginHorizontal: 15,
     marginTop: 15,
     marginBottom: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
     overflow: 'hidden',
     ...Platform.select({
@@ -579,12 +633,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
     paddingHorizontal: 15,
     paddingTop: 15,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
   settingItem: {
@@ -594,7 +646,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   settingContent: {
     flexDirection: 'row',
@@ -602,7 +653,6 @@ const styles = StyleSheet.create({
   },
   settingText: {
     fontSize: 16,
-    color: '#333',
     marginLeft: 15,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
@@ -632,7 +682,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)' 
   },
   modalContent: { 
-    backgroundColor: '#fff', 
     borderRadius: 12, 
     width: '85%', 
     padding: 20, 
@@ -652,13 +701,11 @@ const styles = StyleSheet.create({
   modalTitle: { 
     fontSize: 20, 
     fontWeight: 'bold', 
-    marginBottom: 15, 
-    color: '#333',
+    marginBottom: 15,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto',
   },
   modalText: { 
     fontSize: 16, 
-    color: '#555', 
     textAlign: 'center', 
     marginBottom: 20,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
@@ -673,14 +720,11 @@ const styles = StyleSheet.create({
   },
   inputField: { 
     height: 45, 
-    borderColor: '#ddd', 
-    borderWidth: 1, 
+    borderWidth: 1,
     borderRadius: 8, 
     width: '100%', 
     marginBottom: 20, 
-    paddingHorizontal: 12, 
-    color: '#333',
-    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 12,
     fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   modalButtonContainer: {
@@ -696,9 +740,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   cancelButton: { 
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#ddd',
   },
   confirmButton: { 
     backgroundColor: '#00bcd4', 
@@ -708,8 +751,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: { 
     fontSize: 16, 
-    fontWeight: '600', 
-    color: '#555',
+    fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
   },
   confirmButtonText: { 
